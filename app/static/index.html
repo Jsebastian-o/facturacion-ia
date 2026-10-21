@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facturación Sidoc</title>
+<style>
+  :root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mute:#6b7685;--line:#e3e7ee;--accent:#0b5cab;--accent2:#e07b00;--good:#1a7f4b;--bad:#b3261e}
+  @media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1b212a;--ink:#e8ecf2;--mute:#97a3b4;--line:#2a323d;--accent:#5aa3ee;--accent2:#f0a040}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--card)}
+  h1{font-size:20px;margin:0} h2{font-size:15px;margin:0 0 12px}
+  .sub{color:var(--mute);font-size:13px}
+  button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:8px;cursor:pointer}
+  button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  main{max-width:1200px;margin:0 auto;padding:20px 24px 80px;display:grid;gap:18px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .kpi .t{color:var(--mute);font-size:13px} .kpi .v{font-size:26px;font-weight:650;margin:4px 0} .kpi .p{color:var(--mute);font-size:13px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left} th{color:var(--mute);font-weight:600;font-size:13px}
+  tfoot td{font-weight:650;border-top:2px solid var(--line);border-bottom:0}
+  .scroll{overflow-x:auto}
+  .aviso{background:#fff4e0;color:#7a4b00;border:1px solid #f1c27a;border-radius:10px;padding:10px 14px}
+  .err{background:#fdecea;color:var(--bad);border:1px solid #f3b5b0;border-radius:10px;padding:10px 14px}
+  svg text{fill:var(--mute);font-size:11px}
+  .chat{display:grid;gap:10px}
+  #log{max-height:340px;overflow:auto;display:grid;gap:8px}
+  .msg{padding:9px 12px;border-radius:10px;max-width:85%;white-space:pre-wrap}
+  .msg.user{background:var(--accent);color:#fff;justify-self:end} .msg.bot{background:var(--bg);border:1px solid var(--line)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px} .chips button{font-size:13px;padding:5px 10px;border-radius:999px}
+  form{display:flex;gap:8px} input[type=text]{flex:1;font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Facturación Sidoc</h1><div class="sub" id="estado">Cargando…</div></div>
+  <button id="refrescar">Actualizar ahora</button>
+</header>
+<main>
+  <div id="mensajes"></div>
+  <section class="kpis" id="kpis"></section>
+  <section class="card"><h2>Facturación por categoría (COP)</h2><div class="scroll"><table id="t-cat"></table></div></section>
+  <section class="card"><h2 id="h-peso">Peso facturado (toneladas)</h2><div class="scroll"><table id="t-peso"></table></div></section>
+  <section class="card"><h2>Facturación por día hábil — últimos 30 días (COP)</h2><div id="grafico"></div></section>
+  <section class="card chat">
+    <h2>Pregúntale al agente</h2>
+    <div id="log"></div>
+    <div class="chips" id="chips"></div>
+    <form id="form"><input type="text" id="q" placeholder="Ej.: ¿Cuánto cemento se despachó este mes?" autocomplete="off" maxlength="500"><button class="primary">Enviar</button></form>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt0 = new Intl.NumberFormat('es-CO', {maximumFractionDigits: 0});
+const fmt1 = new Intl.NumberFormat('es-CO', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const cop = (n) => '$ ' + fmt0.format(n);
+const copM = (n) => '$ ' + fmt1.format(n / 1e6) + ' M';
+const fechaCorta = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CO', {day: 'numeric', month: 'short'});
+const fechaDia = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CO', {weekday: 'short', day: 'numeric', month: 'short'});
+
+function el(tag, text, attrs = {}) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+  return e;
+}
+function tabla(t, columnas, filas, pie) {
+  t.replaceChildren();
+  const thead = el('thead'), tr = el('tr');
+  columnas.forEach((c) => tr.append(el('th', c)));
+  thead.append(tr); t.append(thead);
+  const tb = el('tbody');
+  filas.forEach((f) => { const r = el('tr'); f.forEach((c) => r.append(el('td', c))); tb.append(r); });
+  t.append(tb);
+  if (pie) { const tf = el('tfoot'), r = el('tr'); pie.forEach((c) => r.append(el('td', c))); tf.append(r); t.append(tf); }
+}
+function aviso(texto, clase) {
+  const box = $('mensajes'); box.replaceChildren();
+  if (texto) box.append(el('div', texto, {class: clase}));
+}
+
+function pintarResumen(d) {
+  const p = d.periodos;
+  const etq = {
+    dia: d.dia_incluye_no_habiles
+      ? 'Día anterior · ' + fechaDia(p.dia.desde) + ' a ' + fechaDia(p.dia.hasta) + ' (fin de semana / festivo sumado)'
+      : 'Día anterior · ' + fechaDia(p.dia.hasta),
+    mes: 'Acumulado mes · ' + fechaCorta(p.mes.desde) + ' – ' + fechaCorta(p.mes.hasta),
+    anio: 'Acumulado año · ' + fechaCorta(p.anio.desde) + ' – ' + fechaCorta(p.anio.hasta),
+  };
+  const k = $('kpis'); k.replaceChildren();
+  ['dia', 'mes', 'anio'].forEach((n) => {
+    const c = el('div', undefined, {class: 'card kpi'});
+    c.append(el('div', etq[n], {class: 't'}), el('div', cop(d.total[n].valor), {class: 'v'}),
+             el('div', fmt1.format(d.total[n].peso_ton) + ' t facturadas', {class: 'p'}));
+    k.append(c);
+  });
+  const sum = (n, f) => d.categorias.reduce((a, c) => a + c[n][f], 0);
+  tabla($('t-cat'), ['Categoría', 'Día anterior', 'Acumulado mes', 'Acumulado año'],
+    d.categorias.map((c) => [c.categoria, cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor)]),
+    ['Total', cop(sum('dia', 'valor')), cop(sum('mes', 'valor')), cop(sum('anio', 'valor'))]);
+  $('h-peso').textContent = 'Peso facturado (toneladas) — ' + d.peso_foco.map((x) => x.categoria).join(' y ');
+  tabla($('t-peso'), ['Categoría', 'Día anterior', 'Acumulado mes', 'Acumulado año'],
+    d.peso_foco.map((c) => [c.categoria, fmt1.format(c.dia), fmt1.format(c.mes), fmt1.format(c.anio)]),
+    ['Total', ...['dia', 'mes', 'anio'].map((n) => fmt1.format(d.peso_foco.reduce((a, c) => a + c[n], 0)))]);
+  const carga = d.fecha_carga_vista ? ' · vista cargada ' + d.fecha_carga_vista.replace('T', ' ') : '';
+  $('estado').textContent = 'Datos hasta ' + fechaCorta(p.dia.hasta) + carga + ' · consultado ' + d.datos_cargados_en.slice(11, 16);
+  if (d.aviso) aviso(d.aviso, 'aviso');
+  else if (d.sin_facturacion_dia) aviso('No hay facturación registrada para el día hábil ' + fechaDia(p.dia.desde) + '.', 'aviso');
+  else aviso('');
+}
+
+function pintarGrafico(serie) {
+  const W = 1100, H = 220, m = {l: 8, r: 8, t: 10, b: 24};
+  const max = Math.max(...serie.map((s) => s.valor), 1);
+  const bw = (W - m.l - m.r) / serie.length;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', '100%'); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Facturación por día hábil de los últimos 30 días');
+  serie.forEach((s, i) => {
+    const h = (s.valor / max) * (H - m.t - m.b);
+    const r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x', m.l + i * bw + 2); r.setAttribute('width', Math.max(bw - 4, 1));
+    r.setAttribute('y', H - m.b - h); r.setAttribute('height', Math.max(h, 0));
+    r.setAttribute('rx', 2); r.setAttribute('fill', 'var(--accent)');
+    const tt = document.createElementNS(ns, 'title'); tt.textContent = fechaCorta(s.fecha) + ': ' + cop(s.valor);
+    r.append(tt); svg.append(r);
+    if (i % 5 === 0) {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', m.l + i * bw); t.setAttribute('y', H - 6); t.textContent = fechaCorta(s.fecha); svg.append(t);
+    }
+  });
+  $('grafico').replaceChildren(svg);
+}
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) { let m = 'Error ' + r.status; try { m = (await r.json()).detail || m; } catch (_) {} throw new Error(m); }
+  return r.json();
+}
+async function cargar() {
+  try {
+    const [r, t] = await Promise.all([api('/api/resumen'), api('/api/tendencia?dias=30')]);
+    pintarResumen(r); pintarGrafico(t);
+  } catch (e) { aviso(e.message, 'err'); }
+}
+$('refrescar').onclick = async () => { $('refrescar').disabled = true;
+  try { await api('/api/refresh', {method: 'POST'}); } catch (e) { aviso(e.message, 'err'); }
+  await cargar(); $('refrescar').disabled = false; };
+
+// ---- Chat
+const historial = [];
+function burbuja(texto, quien) { const m = el('div', texto, {class: 'msg ' + quien}); $('log').append(m); $('log').scrollTop = 1e9; return m; }
+async function preguntar(texto) {
+  burbuja(texto, 'user'); historial.push({role: 'user', content: texto});
+  const espera = burbuja('Consultando…', 'bot');
+  try {
+    const r = await api('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mensajes: historial})});
+    espera.textContent = r.respuesta; historial.push({role: 'assistant', content: r.respuesta});
+  } catch (e) { espera.textContent = e.message; historial.pop(); }
+}
+$('form').onsubmit = (ev) => { ev.preventDefault(); const q = $('q').value.trim(); if (q) { $('q').value = ''; preguntar(q); } };
+['¿Cuánto se facturó ayer?', '¿Cuántas toneladas de acero van en el mes?', '¿Qué tienda facturó más este año?', '¿Cómo va el cemento en el año?']
+  .forEach((s) => { const b = el('button', s, {type: 'button'}); b.onclick = () => preguntar(s); $('chips').append(b); });
+
+cargar(); setInterval(cargar, 60 * 1000);
+</script>
+</body>
+</html>
