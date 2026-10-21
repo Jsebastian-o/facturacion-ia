@@ -44,6 +44,11 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
   domingo 1 pertenecen al mes del viernes al que se suman.
 - Las categorías de peso se configuran con `CATEGORIAS_PESO` y coinciden por prefijo
   (`GR_CEMENTO` encuentra `GR_CEMENTOS`).
+- **Pestaña "Hoy":** muestra la misma información (tarjetas, tablas y gráfica) pero con el día en curso, que es parcial.
+  Sirve para seguir el día; el cierre oficial es la pestaña "Resumen", que llega hasta el día anterior.
+  El acumulado del mes y del año de esa pestaña incluye lo facturado hoy. Aplica la misma regla de fines de semana y
+  festivos. Qué tan al día esté depende de cada cuánto se cargue la vista en SQL Server; el tablero muestra la hora de
+  la última carga (`FechaCarga`).
 - **Segunda tabla (peso y valor):** ACERO SIDOC y GR_CEMENTO van en toneladas y PRODUCTOS NO SIDOC en pesos
   (`CATEGORIAS_VALOR`). Como las unidades son distintas, esa tabla no tiene fila de totales.
   La primera tabla (todo en COP) sí la conserva.
@@ -60,8 +65,8 @@ pedir solo cada 60 segundos y tiene el botón "Actualizar ahora". Si el servidor
 
 | Ruta | Descripción |
 |---|---|
-| `GET /api/resumen` | Totales y por categoría (día / mes / año), peso foco |
-| `GET /api/tendencia?dias=30` | Serie diaria |
+| `GET /api/resumen?vista=ayer\|hoy` | Totales y por categoría (día / mes / año), peso foco; `hoy` incluye el día en curso |
+| `GET /api/tendencia?dias=30&vista=ayer\|hoy` | Serie por día hábil |
 | `POST /api/refresh` | Fuerza recarga desde el servidor |
 | `POST /api/chat` | Agente (`{"mensajes":[{"role":"user","content":"..."}]}`) |
 | `GET /api/health` | Estado (sin autenticación) |

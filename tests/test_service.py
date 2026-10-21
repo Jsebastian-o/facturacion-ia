@@ -243,3 +243,55 @@ def test_valor_foco_productos_no_sidoc_en_pesos():
 def test_valor_foco_sin_ventas_devuelve_ceros():
     r = _svc([_f("2026-10-19", 10)]).resumen()
     assert r["valor_foco"] == [{"categoria": "PRODUCTOS NO SIDOC", "dia": 0.0, "mes": 0.0, "anio": 0.0}]
+
+
+# ------------------------------------------------------------ vista "Hoy" (día en curso)
+def test_vista_hoy_incluye_el_dia_en_curso_sin_alterar_el_cierre():
+    s = _svc()                                                    # hoy = 2026-10-20, con una fila de hoy (9999 / 99999 kg)
+    cierre, hoy = s.resumen(), s.resumen(en_curso=True)
+    assert cierre["total"]["dia"]["valor"] == 457.0               # el cierre sigue sin hoy
+    assert hoy["en_curso"] is True and cierre["en_curso"] is False
+    assert hoy["periodos"]["dia"] == {"desde": "2026-10-20", "hasta": "2026-10-20"}
+    assert hoy["total"]["dia"] == {"valor": 9999.0, "peso_ton": 99.999}
+    assert hoy["total"]["mes"]["valor"] == cierre["total"]["mes"]["valor"] + 9999
+    assert hoy["total"]["anio"]["valor"] == cierre["total"]["anio"]["valor"] + 9999
+    foco = {f["categoria"]: f for f in hoy["peso_foco"]}
+    assert foco["ACERO SIDOC"]["dia"] == 99.999
+    assert hoy["dia_incluye_no_habiles"] is False
+
+
+def test_vista_hoy_sin_ventas_todavia():
+    r = _svc([f for f in FILAS if f[0] != "2026-10-20"]).resumen(en_curso=True)
+    assert r["sin_facturacion_dia"] is True
+    assert r["total"]["mes"]["valor"] == 757.0                    # el acumulado conserva lo anterior
+
+
+def test_vista_hoy_en_fin_de_semana_se_suma_al_viernes():
+    filas = [_f("2026-10-16", 100), _f("2026-10-17", 10)]         # viernes completo + sábado en curso
+    r = _svc(filas, hoy=date(2026, 10, 17)).resumen(en_curso=True)
+    assert r["periodos"]["dia"] == {"desde": "2026-10-16", "hasta": "2026-10-17"}
+    assert r["total"]["dia"]["valor"] == 110 and r["dia_incluye_no_habiles"] is True
+
+
+def test_tendencia_en_curso_termina_en_hoy():
+    s = _svc()
+    cierre, hoy = s.tendencia(dias=3), s.tendencia(dias=3, en_curso=True)
+    assert cierre[-1]["fecha"] == "2026-10-19"
+    assert [x["fecha"] for x in hoy] == ["2026-10-19", "2026-10-20"]   # 18-oct es domingo: no aparece
+    assert hoy[-1]["valor"] == 9999.0 and hoy[-1]["peso_foco_ton"] == 99.999
+
+
+def test_api_vista_hoy(monkeypatch):
+    monkeypatch.setenv("DATA_SOURCE", "csv"); monkeypatch.setenv("FECHA_HOY", "2026-10-20")
+    monkeypatch.setenv("APP_USER", "")
+    get_settings.cache_clear()
+    from app.main import app, get_service
+    get_service.cache_clear()
+    c = TestClient(app)
+    ayer, hoy = c.get("/api/resumen").json(), c.get("/api/resumen?vista=hoy").json()
+    assert ayer["en_curso"] is False and hoy["en_curso"] is True
+    assert hoy["periodos"]["dia"]["hasta"] == "2026-10-20"
+    assert hoy["total"]["dia"]["valor"] > 0                       # la muestra trae 32 líneas del 20-oct
+    assert c.get("/api/tendencia?dias=5&vista=hoy").json()[-1]["fecha"] == "2026-10-20"
+    assert c.get("/api/resumen?vista=otra").status_code == 422
+    get_settings.cache_clear(); get_service.cache_clear()

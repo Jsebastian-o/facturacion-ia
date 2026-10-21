@@ -47,14 +47,26 @@
   .card h2{margin:0;font-size:15px;font-weight:650}
   .card .hint{margin:2px 0 14px;color:var(--mute);font-size:13px}
 
+  /* ---------- pestañas ---------- */
+  .tabs{display:inline-flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow);justify-self:start}
+  .tabs button{border:0;background:transparent;padding:8px 20px;border-radius:999px;font-weight:600;color:var(--mute);display:inline-flex;align-items:center;gap:8px;transition:.15s}
+  .tabs button:hover{color:var(--ink)}
+  .tabs button[aria-selected=true]{background:var(--brand);color:#fff}
+  @media (prefers-color-scheme:dark){.tabs button[aria-selected=true]{color:#0b1622}}
+  .live{font-size:11px;font-weight:650;padding:1px 8px;border-radius:999px;background:rgba(238,125,26,.18);color:var(--accent)}
+  .tabs button[aria-selected=true] .live{background:var(--accent);color:#fff}
+  .info{border-radius:12px;padding:11px 16px;font-size:14px;background:rgba(27,108,168,.10);color:var(--ink);border:1px solid rgba(27,108,168,.28)}
+  .stack{display:grid;gap:10px}
+
   /* ---------- tarjetas de cifras ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px}
-  .kpi{position:relative;overflow:hidden;padding-top:20px}
+  .kpi{position:relative;overflow:hidden;padding-top:20px;container-type:inline-size}
   .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--brand2)}
   .kpi.dia::before{background:var(--accent)}
   .kpi .t{color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
   .kpi .rng{color:var(--mute);font-size:12.5px;margin-top:2px;min-height:19px}
-  .kpi .v{font-size:30px;line-height:1.15;font-weight:700;margin:8px 0 2px;letter-spacing:-.4px}
+  /* el tamaño se ajusta al ancho de la tarjeta para que cifras de cientos de miles de millones quepan en una línea */
+  .kpi .v{font-size:clamp(20px,9cqw,30px);line-height:1.15;font-weight:700;margin:8px 0 2px;letter-spacing:-.4px;white-space:nowrap}
   .kpi .p{color:var(--mute);font-size:13.5px}
   .kpi .p b{color:var(--ink);font-weight:650}
 
@@ -80,6 +92,7 @@
   #grafico text{fill:var(--mute);font-size:11px}
   #grafico .grid{stroke:var(--line);stroke-width:1}
   #grafico rect.b{fill:var(--brand2);transition:fill .12s} #grafico rect.b:hover{fill:var(--accent)}
+  #grafico rect.b.hoy{fill:var(--accent);opacity:.85}
 
   /* ---------- avisos ---------- */
   .aviso,.err{border-radius:12px;padding:11px 16px;font-size:14px}
@@ -116,7 +129,7 @@
     .side{position:static;height:560px}
   }
   @media (max-width:560px){
-    .layout{padding:14px 12px 30px} .topbar-in{padding:12px 14px} .kpi .v{font-size:26px}
+    .layout{padding:14px 12px 30px} .topbar-in{padding:12px 14px}
   }
 </style>
 </head>
@@ -131,7 +144,11 @@
 
 <div class="layout">
   <main class="main">
-    <div id="mensajes"></div>
+    <nav class="tabs" role="tablist" aria-label="Vista del tablero">
+      <button role="tab" id="tab-ayer" data-vista="ayer" aria-selected="true">Resumen</button>
+      <button role="tab" id="tab-hoy" data-vista="hoy" aria-selected="false">Hoy <span class="live">en curso</span></button>
+    </nav>
+    <div id="mensajes" class="stack"></div>
     <section class="kpis" id="kpis"></section>
 
     <section class="card">
@@ -148,7 +165,7 @@
 
     <section class="card">
       <h2>Facturación por día hábil · últimos 30 días</h2>
-      <p class="hint">Los fines de semana y festivos están sumados al día hábil anterior. Pasa el cursor sobre una barra para ver el valor.</p>
+      <p class="hint" id="h-graf"></p>
       <div id="grafico"></div>
     </section>
   </main>
@@ -204,19 +221,23 @@ function nombreConBarra(nombre, pct) {
   return w;
 }
 function unidad(texto, clase) { return el('span', texto, {class: 'unit ' + clase}); }
-function aviso(texto, clase) {
+// Lista de avisos [[texto, clase], ...]; clase: 'info' | 'aviso' | 'err'
+function avisos(lista) {
   const box = $('mensajes'); box.replaceChildren();
-  if (texto) box.append(el('div', texto, {class: clase}));
+  lista.filter(Boolean).forEach(([t, c]) => box.append(el('div', t, {class: c})));
 }
+const horaDe = (iso) => iso ? iso.slice(11, 16) : null;
 
 function pintarResumen(d) {
-  const p = d.periodos;
+  const p = d.periodos, hoy = d.en_curso;
+  const lblDia = hoy ? 'Hoy' : 'Día anterior';
+  const rangoDia = d.dia_incluye_no_habiles
+    ? fechaDia(p.dia.desde) + ' a ' + fechaDia(p.dia.hasta) + ' · incluye fin de semana / festivo'
+    : fechaDia(p.dia.hasta);
   const etq = {
-    dia: ['Día anterior', d.dia_incluye_no_habiles
-      ? fechaDia(p.dia.desde) + ' a ' + fechaDia(p.dia.hasta) + ' · incluye fin de semana / festivo'
-      : fechaDia(p.dia.hasta)],
-    mes: ['Acumulado del mes', fechaCorta(p.mes.desde) + ' – ' + fechaCorta(p.mes.hasta)],
-    anio: ['Acumulado del año', fechaCorta(p.anio.desde) + ' – ' + fechaCorta(p.anio.hasta)],
+    dia: [hoy ? 'Hoy · en curso' : 'Día anterior', rangoDia + (hoy ? ' · parcial' : '')],
+    mes: [hoy ? 'Acumulado del mes · con hoy' : 'Acumulado del mes', fechaCorta(p.mes.desde) + ' – ' + fechaCorta(p.mes.hasta)],
+    anio: [hoy ? 'Acumulado del año · con hoy' : 'Acumulado del año', fechaCorta(p.anio.desde) + ' – ' + fechaCorta(p.anio.hasta)],
   };
   const k = $('kpis'); k.replaceChildren();
   ['dia', 'mes', 'anio'].forEach((n) => {
@@ -231,7 +252,7 @@ function pintarResumen(d) {
   // Tabla 1: valor por categoría, con totales (todo en COP)
   const sum = (n) => d.categorias.reduce((a, c) => a + c[n].valor, 0);
   const totalAnio = sum('anio') || 1;
-  tabla($('t-cat'), ['Categoría', 'Día anterior', 'Acumulado mes', 'Acumulado año'],
+  tabla($('t-cat'), ['Categoría', lblDia, 'Acumulado mes', 'Acumulado año'],
     d.categorias.map((c) => [nombreConBarra(c.categoria, (c.anio.valor / totalAnio) * 100),
       cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor)]),
     ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio'))]);
@@ -243,41 +264,58 @@ function pintarResumen(d) {
   ];
   $('h-foco').textContent = d.peso_foco.map((x) => x.categoria).join(' y ') + ' en toneladas'
     + ((d.valor_foco || []).length ? '; ' + d.valor_foco.map((x) => x.categoria).join(' y ') + ' en pesos (COP).' : '.');
-  tabla($('t-foco'), ['Línea', 'Unidad', 'Día anterior', 'Acumulado mes', 'Acumulado año'], filas);
+  tabla($('t-foco'), ['Línea', 'Unidad', lblDia, 'Acumulado mes', 'Acumulado año'], filas);
 
+  $('h-graf').textContent = 'Eje en millones de pesos (M). Los fines de semana y festivos están sumados al día hábil anterior.'
+    + (hoy ? ' La barra naranja es hoy y está incompleta.' : ' Pasa el cursor sobre una barra para ver el valor.');
+
+  const hVista = horaDe(d.fecha_carga_vista);
   const carga = d.fecha_carga_vista ? ' · vista cargada ' + d.fecha_carga_vista.replace('T', ' ').slice(0, 16) : '';
-  $('estado').textContent = 'Datos hasta ' + fechaDia(p.dia.hasta) + carga;
+  $('estado').textContent = (hoy ? 'Hoy ' + fechaDia(p.dia.hasta) : 'Datos hasta ' + fechaDia(p.dia.hasta)) + carga;
   $('vivo').textContent = 'Actualizado ' + d.datos_cargados_en.slice(11, 16);
   $('dot').classList.toggle('off', !!d.aviso);
-  if (d.aviso) aviso(d.aviso, 'aviso');
-  else if (d.sin_facturacion_dia) aviso('No hay facturación registrada para el día hábil ' + fechaDia(p.dia.desde) + '.', 'aviso');
-  else aviso('');
+
+  avisos([
+    hoy ? ['Día en curso: las cifras son parciales y cambian durante el día' + (hVista ? '. Datos de la vista cargados a las ' + hVista + '.' : '.'), 'info'] : null,
+    d.aviso ? [d.aviso, 'aviso'] : null,
+    d.sin_facturacion_dia ? [hoy
+      ? 'Todavía no hay facturación registrada hoy' + (hVista ? ' (vista cargada a las ' + hVista + ')' : '') + '.'
+      : 'No hay facturación registrada para el día hábil ' + fechaDia(p.dia.desde) + '.', 'aviso'] : null,
+  ]);
 }
 
-function pintarGrafico(serie) {
+// Marcas "redondas" para el eje: unas 4-5 líneas (1, 2, 2.5, 5 × potencia de 10), nunca decenas.
+function marcas(max) {
+  const crudo = (max || 1) / 4, mag = Math.pow(10, Math.floor(Math.log10(crudo))), f = crudo / mag;
+  const base = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  const paso = base * mag, techo = Math.max(Math.ceil(max / paso), 1) * paso, v = [];
+  for (let x = 0; x <= techo + paso / 2; x += paso) v.push(x);
+  return {techo, v};
+}
+
+function pintarGrafico(serie, fechaHoy) {
   const ns = 'http://www.w3.org/2000/svg';
-  const W = 1000, H = 250, m = {l: 54, r: 8, t: 12, b: 26};
-  const max = Math.max(...serie.map((s) => s.valor), 1);
-  const paso = max / 1e6 > 500 ? 250e6 : max / 1e6 > 200 ? 100e6 : max / 1e6 > 80 ? 50e6 : 20e6;
-  const techo = Math.ceil(max / paso) * paso || paso;
+  const W = 1000, H = 250, m = {l: 68, r: 8, t: 12, b: 26};
+  const {techo, v: ticks} = marcas(Math.max(...serie.map((s) => s.valor), 1));
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Facturación por día hábil de los últimos 30 días');
   const y = (v) => H - m.b - (v / techo) * (H - m.t - m.b);
   const t = (x, yy, txt, anchor) => { const e = document.createElementNS(ns, 'text'); e.setAttribute('x', x); e.setAttribute('y', yy);
     if (anchor) e.setAttribute('text-anchor', anchor); e.textContent = txt; svg.append(e); };
-  for (let v = 0; v <= techo + 1; v += paso) {
+  ticks.forEach((v) => {
     const ln = document.createElementNS(ns, 'line');
     ln.setAttribute('x1', m.l); ln.setAttribute('x2', W - m.r); ln.setAttribute('y1', y(v)); ln.setAttribute('y2', y(v)); ln.setAttribute('class', 'grid');
-    svg.append(ln); t(m.l - 8, y(v) + 4, (v / 1e6) + ' M', 'end');
-  }
+    svg.append(ln); t(m.l - 8, y(v) + 4, v === 0 ? '0' : fmt0.format(v / 1e6) + ' M', 'end');
+  });
   const bw = (W - m.l - m.r) / serie.length;
   serie.forEach((s, i) => {
     const r = document.createElementNS(ns, 'rect');
-    const h = y(0) - y(s.valor);
-    r.setAttribute('class', 'b'); r.setAttribute('x', m.l + i * bw + bw * .14); r.setAttribute('width', Math.max(bw * .72, 1));
+    const h = y(0) - y(s.valor), esHoy = fechaHoy && s.fecha === fechaHoy;
+    r.setAttribute('class', 'b' + (esHoy ? ' hoy' : '')); r.setAttribute('x', m.l + i * bw + bw * .14); r.setAttribute('width', Math.max(bw * .72, 1));
     r.setAttribute('y', y(s.valor)); r.setAttribute('height', Math.max(h, 0)); r.setAttribute('rx', 3);
-    const tt = document.createElementNS(ns, 'title'); tt.textContent = fechaDia(s.fecha) + ': ' + cop(s.valor) + ' · ' + ton(s.peso_foco_ton) + ' (acero + cemento)';
+    const tt = document.createElementNS(ns, 'title');
+    tt.textContent = fechaDia(s.fecha) + (esHoy ? ' (parcial)' : '') + ': ' + cop(s.valor) + ' · ' + ton(s.peso_foco_ton) + ' (acero + cemento)';
     r.append(tt); svg.append(r);
     if (i % Math.ceil(serie.length / 8) === 0) t(m.l + i * bw + bw / 2, H - 7, fechaCorta(s.fecha), 'middle');
   });
@@ -289,14 +327,31 @@ async function api(url, opts) {
   if (!r.ok) { let m = 'Error ' + r.status; try { m = (await r.json()).detail || m; } catch (_) {} throw new Error(m); }
   return r.json();
 }
-async function cargar() {
-  try {
-    const [r, t] = await Promise.all([api('/api/resumen'), api('/api/tendencia?dias=30')]);
-    pintarResumen(r); pintarGrafico(t);
-  } catch (e) { aviso(e.message, 'err'); $('dot').classList.add('off'); $('vivo').textContent = 'Sin conexión'; }
+let vista = location.hash === '#hoy' ? 'hoy' : 'ayer';
+let cargaId = 0;
+function marcarPestana() {
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === vista)));
 }
+async function cargar() {
+  const mia = ++cargaId;   // si cambias de pestaña con una carga en vuelo, se descarta la respuesta vieja
+  const v = vista;
+  try {
+    const [r, t] = await Promise.all([api('/api/resumen?vista=' + v), api('/api/tendencia?dias=30&vista=' + v)]);
+    if (mia !== cargaId) return;
+    pintarResumen(r); pintarGrafico(t, v === 'hoy' ? r.periodos.dia.hasta : null);
+  } catch (e) {
+    if (mia !== cargaId) return;
+    avisos([[e.message, 'err']]); $('dot').classList.add('off'); $('vivo').textContent = 'Sin conexión';
+  }
+}
+document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
+  if (vista === b.dataset.vista) return;
+  vista = b.dataset.vista; history.replaceState(null, '', vista === 'hoy' ? '#hoy' : location.pathname + location.search);
+  marcarPestana(); cargar();
+});
+marcarPestana();
 $('refrescar').onclick = async () => { $('refrescar').disabled = true;
-  try { await api('/api/refresh', {method: 'POST'}); } catch (e) { aviso(e.message, 'err'); }
+  try { await api('/api/refresh', {method: 'POST'}); } catch (e) { avisos([[e.message, 'err']]); }
   await cargar(); $('refrescar').disabled = false; };
 
 // ---- Agente (panel lateral)

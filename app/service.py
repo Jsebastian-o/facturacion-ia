@@ -6,6 +6,8 @@ Reglas:
 - Los sábados, domingos y festivos (calendario de Colombia) se suman al día
   hábil anterior. Viernes + sábado + domingo = "viernes"; si el lunes es festivo,
   viernes + sábado + domingo + lunes = "viernes".
+- Vista "Hoy": igual que lo anterior pero terminando en hoy (el día en curso, parcial), con el acumulado
+  del mes y del año incluyéndolo. Es solo para seguir el día; el cierre oficial es "día anterior".
 - "Día anterior" = el día hábil al que pertenece ayer (hora de Bogotá). Nunca se
   incluye hoy, porque el día en curso está incompleto.
 - Acumulado del mes = del día 1 del mes de ese día hábil hasta ayer.
@@ -103,7 +105,9 @@ class FacturacionService:
             # Se carga desde el 1 de enero del año anterior para poder comparar años.
             desde = date(hoy.year - 1, 1, 1)
             try:
-                df, fecha_carga = self.repo.cargar(desde, hoy)
+                # hasta es exclusivo: se incluye hoy para la vista "Hoy"; los cálculos de
+                # "día anterior", mes y año lo excluyen porque filtran por fecha real <= ayer.
+                df, fecha_carga = self.repo.cargar(desde, hoy + timedelta(days=1))
                 self._cache = _Cache(self._a_dias_habiles(df), hoy, datetime.now(TZ), fecha_carga,
                                      time.monotonic() + self.settings.cache_ttl_seconds)
             except Exception as exc:  # noqa: BLE001
@@ -169,8 +173,12 @@ class FacturacionService:
         return self._por_prefijo(df, self.settings.categorias_valor)
 
     # ------------------------------------------------------------------ resumen
-    def resumen(self, corte: date | None = None) -> dict:
+    def resumen(self, corte: date | None = None, en_curso: bool = False) -> dict:
+        """en_curso=True: la misma información pero con el día de hoy (parcial) como "día" del período,
+        y el acumulado del mes y del año incluyéndolo."""
         corte = corte or self.hoy()
+        if en_curso:
+            corte += timedelta(days=1)
         cache = self._datos(self.hoy())
         df = cache.df
         per = self.periodos(corte)
@@ -209,6 +217,7 @@ class FacturacionService:
         return {
             "fecha_corte": corte.isoformat(),
             "periodos": {k: {"desde": d.isoformat(), "hasta": h.isoformat()} for k, (d, h) in per.items()},
+            "en_curso": en_curso,
             "dia_incluye_no_habiles": dia_desde != dia_hasta,
             "total": totales,
             "categorias": categorias,
@@ -220,9 +229,12 @@ class FacturacionService:
             "aviso": cache.aviso,
         }
 
-    def tendencia(self, dias: int = 30, corte: date | None = None) -> list[dict]:
-        """Serie por día hábil (los fines de semana y festivos ya están sumados al día hábil anterior)."""
+    def tendencia(self, dias: int = 30, corte: date | None = None, en_curso: bool = False) -> list[dict]:
+        """Serie por día hábil (los fines de semana y festivos ya están sumados al día hábil anterior).
+        en_curso=True termina en hoy (parcial) en lugar de ayer."""
         corte = corte or self.hoy()
+        if en_curso:
+            corte += timedelta(days=1)
         dias = max(1, min(int(dias), 366))
         cache = self._datos(self.hoy())
         ayer = corte - timedelta(days=1)

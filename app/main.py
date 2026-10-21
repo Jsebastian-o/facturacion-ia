@@ -77,15 +77,22 @@ def health():
     return {"ok": True, "fuente": get_settings().data_source, **get_service().estado()}
 
 
+def _en_curso(vista: str) -> bool:
+    if vista not in ("ayer", "hoy"):
+        raise HTTPException(422, "vista debe ser 'ayer' o 'hoy'")
+    return vista == "hoy"
+
+
 @app.get("/api/resumen", dependencies=[Depends(requiere_acceso)])
-def resumen(fecha_corte: str | None = None):
-    """fecha_corte = 'hoy' a efectos del cálculo (opcional; por defecto la fecha actual)."""
-    return _con_servidor(lambda: get_service().resumen(_corte(fecha_corte)))
+def resumen(fecha_corte: str | None = None, vista: str = "ayer"):
+    """vista='ayer' (cierre hasta el día anterior) o 'hoy' (incluye el día en curso, parcial).
+    fecha_corte = 'hoy' a efectos del cálculo (opcional; por defecto la fecha actual)."""
+    return _con_servidor(lambda: get_service().resumen(_corte(fecha_corte), _en_curso(vista)))
 
 
 @app.get("/api/tendencia", dependencies=[Depends(requiere_acceso)])
-def tendencia(dias: int = 30, fecha_corte: str | None = None):
-    return _con_servidor(lambda: get_service().tendencia(dias, _corte(fecha_corte)))
+def tendencia(dias: int = 30, fecha_corte: str | None = None, vista: str = "ayer"):
+    return _con_servidor(lambda: get_service().tendencia(dias, _corte(fecha_corte), _en_curso(vista)))
 
 
 @app.post("/api/refresh", dependencies=[Depends(requiere_acceso)])
