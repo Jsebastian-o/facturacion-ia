@@ -152,14 +152,21 @@ class FacturacionService:
         """Ventas cuyo día hábil es >= desde y cuya fecha real es <= hasta."""
         return df[(df["Fecha"] >= pd.Timestamp(desde)) & (df["FechaReal"] <= pd.Timestamp(hasta))]
 
-    def _categorias_peso(self, df: pd.DataFrame) -> list[str]:
-        """Categorías reales de la vista que coinciden (por prefijo) con CATEGORIAS_PESO."""
+    @staticmethod
+    def _por_prefijo(df: pd.DataFrame, patrones) -> list[str]:
+        """Categorías reales de la vista que coinciden (por prefijo, sin importar mayúsculas) con los patrones."""
         existentes = sorted(df["Categoria"].unique())
         elegidas: list[str] = []
-        for patron in self.settings.categorias_peso:
+        for patron in patrones:
             hallazgos = [c for c in existentes if c.upper().startswith(patron)]
             elegidas += hallazgos if hallazgos else [patron]
         return list(dict.fromkeys(elegidas))
+
+    def _categorias_peso(self, df: pd.DataFrame) -> list[str]:
+        return self._por_prefijo(df, self.settings.categorias_peso)
+
+    def _categorias_valor(self, df: pd.DataFrame) -> list[str]:
+        return self._por_prefijo(df, self.settings.categorias_valor)
 
     # ------------------------------------------------------------------ resumen
     def resumen(self, corte: date | None = None) -> dict:
@@ -190,6 +197,14 @@ class FacturacionService:
                 fila[nombre] = por_cat.get(cat, {}).get(nombre, vacio)["peso_ton"]
             peso_foco.append(fila)
 
+        # Categorías que se muestran en dinero (COP): no se suman con las de peso.
+        valor_foco = []
+        for cat in self._categorias_valor(df):
+            fila = {"categoria": cat}
+            for nombre in per:
+                fila[nombre] = por_cat.get(cat, {}).get(nombre, vacio)["valor"]
+            valor_foco.append(fila)
+
         dia_desde, dia_hasta = per["dia"]
         return {
             "fecha_corte": corte.isoformat(),
@@ -198,6 +213,7 @@ class FacturacionService:
             "total": totales,
             "categorias": categorias,
             "peso_foco": peso_foco,
+            "valor_foco": valor_foco,
             "sin_facturacion_dia": totales["dia"]["valor"] == 0 and totales["dia"]["peso_ton"] == 0,
             "datos_cargados_en": cache.cargado_en.isoformat(timespec="seconds"),
             "fecha_carga_vista": cache.fecha_carga.isoformat(timespec="seconds") if cache.fecha_carga else None,

@@ -4,79 +4,206 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Facturación Sidoc</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d3b66'/%3E%3Cpath d='M6 18v-6M11 18V6M16 18v-4' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
-  :root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mute:#6b7685;--line:#e3e7ee;--accent:#0b5cab;--accent2:#e07b00;--good:#1a7f4b;--bad:#b3261e}
-  @media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1b212a;--ink:#e8ecf2;--mute:#97a3b4;--line:#2a323d;--accent:#5aa3ee;--accent2:#f0a040}}
+  :root{
+    --bg:#eef1f5; --surface:#ffffff; --surface2:#f6f8fb; --ink:#14202e; --mute:#667487; --line:#e1e6ee;
+    --brand:#0d3b66; --brand2:#1b6ca8; --accent:#ee7d1a; --good:#1a7f4b; --bad:#b3261e;
+    --shadow:0 1px 2px rgba(16,32,52,.06),0 6px 20px rgba(16,32,52,.06);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0e141b; --surface:#161e28; --surface2:#1c2633; --ink:#e8edf4; --mute:#93a1b4; --line:#263241;
+    --brand:#5aa3ee; --brand2:#7db8f5; --accent:#f59a4a; --good:#4cc38a; --bad:#ff8a80;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.25);
+  }}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--card)}
-  h1{font-size:20px;margin:0} h2{font-size:15px;margin:0 0 12px}
-  .sub{color:var(--mute);font-size:13px}
-  button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:8px;cursor:pointer}
-  button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-  main{max-width:1200px;margin:0 auto;padding:20px 24px 80px;display:grid;gap:18px}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-  .kpi .t{color:var(--mute);font-size:13px} .kpi .v{font-size:26px;font-weight:650;margin:4px 0} .kpi .p{color:var(--mute);font-size:13px}
-  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
-  th:first-child,td:first-child{text-align:left} th{color:var(--mute);font-weight:600;font-size:13px}
-  tfoot td{font-weight:650;border-top:2px solid var(--line);border-bottom:0}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;cursor:pointer}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- barra superior ---------- */
+  .topbar{position:sticky;top:0;z-index:5;background:linear-gradient(135deg,#0b2f52,#0d3b66 55%,#1b6ca8);color:#fff;box-shadow:0 2px 12px rgba(5,20,40,.25)}
+  .topbar-in{max-width:1560px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .logo{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.14);display:grid;place-items:center;flex:none}
+  .logo svg{width:22px;height:22px}
+  .titles h1{margin:0;font-size:18px;font-weight:650;letter-spacing:.2px}
+  .titles .sub{font-size:12.5px;opacity:.78}
+  .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 12px;font-size:12.5px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#4cd38a;box-shadow:0 0 0 0 rgba(76,211,138,.7);animation:pulso 2s infinite}
+  .dot.off{background:#ffb199;animation:none}
+  @keyframes pulso{70%{box-shadow:0 0 0 7px rgba(76,211,138,0)}100%{box-shadow:0 0 0 0 rgba(76,211,138,0)}}
+  .btn{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;padding:7px 14px;border-radius:9px;transition:.15s}
+  .btn:hover{background:rgba(255,255,255,.2)} .btn:disabled{opacity:.6;cursor:wait}
+
+  /* ---------- estructura: contenido + panel lateral ---------- */
+  .layout{max-width:1560px;margin:0 auto;padding:20px 24px 40px;display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:20px;align-items:start}
+  .main{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;min-width:0}
+  .side{position:sticky;top:84px;height:calc(100vh - 104px);min-height:420px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
+  .card h2{margin:0;font-size:15px;font-weight:650}
+  .card .hint{margin:2px 0 14px;color:var(--mute);font-size:13px}
+
+  /* ---------- tarjetas de cifras ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px}
+  .kpi{position:relative;overflow:hidden;padding-top:20px}
+  .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--brand2)}
+  .kpi.dia::before{background:var(--accent)}
+  .kpi .t{color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+  .kpi .rng{color:var(--mute);font-size:12.5px;margin-top:2px;min-height:19px}
+  .kpi .v{font-size:30px;line-height:1.15;font-weight:700;margin:8px 0 2px;letter-spacing:-.4px}
+  .kpi .p{color:var(--mute);font-size:13.5px}
+  .kpi .p b{color:var(--ink);font-weight:650}
+
+  /* ---------- tablas ---------- */
   .scroll{overflow-x:auto}
-  .aviso{background:#fff4e0;color:#7a4b00;border:1px solid #f1c27a;border-radius:10px;padding:10px 14px}
-  .err{background:#fdecea;color:var(--bad);border:1px solid #f3b5b0;border-radius:10px;padding:10px 14px}
-  svg text{fill:var(--mute);font-size:11px}
-  .chat{display:grid;gap:10px}
-  #log{max-height:340px;overflow:auto;display:grid;gap:8px}
-  .msg{padding:9px 12px;border-radius:10px;max-width:85%;white-space:pre-wrap}
-  .msg.user{background:var(--accent);color:#fff;justify-self:end} .msg.bot{background:var(--bg);border:1px solid var(--line)}
-  .chips{display:flex;flex-wrap:wrap;gap:8px} .chips button{font-size:13px;padding:5px 10px;border-radius:999px}
-  form{display:flex;gap:8px} input[type=text]{flex:1;font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:11px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--mute);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;background:var(--surface2)}
+  th:first-child{border-top-left-radius:9px} th:last-child{border-top-right-radius:9px}
+  tbody tr:hover td{background:var(--surface2)}
+  tbody tr:last-child td{border-bottom:0}
+  tfoot td{font-weight:700;border-top:2px solid var(--line);border-bottom:0;background:var(--surface2)}
+  .cat{display:grid;gap:5px;min-width:170px}
+  .cat .bar{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .cat .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand2),var(--brand));border-radius:3px}
+  .unit{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;letter-spacing:.3px}
+  .unit.t{background:rgba(27,108,168,.13);color:var(--brand2)}
+  .unit.c{background:rgba(238,125,26,.15);color:var(--accent)}
+
+  /* ---------- gráfica ---------- */
+  #grafico svg{display:block;width:100%;height:auto}
+  #grafico text{fill:var(--mute);font-size:11px}
+  #grafico .grid{stroke:var(--line);stroke-width:1}
+  #grafico rect.b{fill:var(--brand2);transition:fill .12s} #grafico rect.b:hover{fill:var(--accent)}
+
+  /* ---------- avisos ---------- */
+  .aviso,.err{border-radius:12px;padding:11px 16px;font-size:14px}
+  .aviso{background:#fff4e0;color:#7a4b00;border:1px solid #f1c27a}
+  .err{background:#fdecea;color:var(--bad);border:1px solid #f3b5b0}
+  @media (prefers-color-scheme:dark){.aviso{background:#3a2c12;color:#ffd699;border-color:#6b4d1c}.err{background:#3b1d1b;border-color:#6b2f2b}}
+
+  /* ---------- panel del agente ---------- */
+  .chat{height:100%;display:flex;flex-direction:column;padding:0;overflow:hidden}
+  .chat-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ffb45e);display:grid;place-items:center;color:#fff;flex:none}
+  .avatar svg{width:20px;height:20px}
+  .chat-head b{display:block;font-size:15px} .chat-head span{color:var(--mute);font-size:12.5px}
+  #log{flex:1;overflow-y:auto;padding:16px 16px 6px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+  .msg{padding:10px 13px;border-radius:14px;max-width:88%;white-space:pre-wrap;word-wrap:break-word;font-size:14.5px;line-height:1.45}
+  .msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+  @media (prefers-color-scheme:dark){.msg.user{color:#0b1622}}
+  .msg.bot{align-self:flex-start;background:var(--surface2);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.bot.wait{color:var(--mute);font-style:italic}
+  .vacio{margin:auto;text-align:center;color:var(--mute);font-size:13.5px;padding:0 10px}
+  .chips{padding:8px 14px 0;display:flex;flex-wrap:wrap;gap:7px}
+  .chips button{font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);transition:.15s}
+  .chips button:hover{border-color:var(--brand2);color:var(--brand2)}
+  form{display:flex;gap:8px;padding:12px 14px 14px}
+  input[type=text]{flex:1;min-width:0;font:inherit;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);outline:0}
+  input[type=text]:focus{border-color:var(--brand2);box-shadow:0 0 0 3px rgba(27,108,168,.18)}
+  .send{border:0;background:var(--accent);color:#fff;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;transition:.15s}
+  .send:hover{filter:brightness(1.08)} .send:disabled{opacity:.5;cursor:wait}
+  .send svg{width:19px;height:19px}
+
+  /* ---------- pantallas angostas ---------- */
+  @media (max-width:1100px){
+    .layout{grid-template-columns:minmax(0,1fr)}
+    .side{position:static;height:560px}
+  }
+  @media (max-width:560px){
+    .layout{padding:14px 12px 30px} .topbar-in{padding:12px 14px} .kpi .v{font-size:26px}
+  }
 </style>
 </head>
 <body>
-<header>
-  <div><h1>Facturación Sidoc</h1><div class="sub" id="estado">Cargando…</div></div>
-  <button id="refrescar">Actualizar ahora</button>
-</header>
-<main>
-  <div id="mensajes"></div>
-  <section class="kpis" id="kpis"></section>
-  <section class="card"><h2>Facturación por categoría (COP)</h2><div class="scroll"><table id="t-cat"></table></div></section>
-  <section class="card"><h2 id="h-peso">Peso facturado (toneladas)</h2><div class="scroll"><table id="t-peso"></table></div></section>
-  <section class="card"><h2>Facturación por día hábil — últimos 30 días (COP)</h2><div id="grafico"></div></section>
-  <section class="card chat">
-    <h2>Pregúntale al agente</h2>
-    <div id="log"></div>
-    <div class="chips" id="chips"></div>
-    <form id="form"><input type="text" id="q" placeholder="Ej.: ¿Cuánto cemento se despachó este mes?" autocomplete="off" maxlength="500"><button class="primary">Enviar</button></form>
-  </section>
-</main>
+<header class="topbar"><div class="topbar-in">
+  <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+  <div class="titles"><h1>Facturación Sidoc</h1><div class="sub" id="estado">Cargando…</div></div>
+  <div class="spacer"></div>
+  <div class="pill"><span class="dot" id="dot"></span><span id="vivo">Conectando</span></div>
+  <button class="btn" id="refrescar">Actualizar ahora</button>
+</div></header>
+
+<div class="layout">
+  <main class="main">
+    <div id="mensajes"></div>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <h2>Facturación por categoría</h2>
+      <p class="hint">Pesos colombianos (COP). La barra muestra la participación de cada categoría en el acumulado del año.</p>
+      <div class="scroll"><table id="t-cat"></table></div>
+    </section>
+
+    <section class="card">
+      <h2>Peso y valor por línea de producto</h2>
+      <p class="hint" id="h-foco"></p>
+      <div class="scroll"><table id="t-foco"></table></div>
+    </section>
+
+    <section class="card">
+      <h2>Facturación por día hábil · últimos 30 días</h2>
+      <p class="hint">Los fines de semana y festivos están sumados al día hábil anterior. Pasa el cursor sobre una barra para ver el valor.</p>
+      <div id="grafico"></div>
+    </section>
+  </main>
+
+  <aside class="side">
+    <section class="card chat" aria-label="Asistente de facturación">
+      <div class="chat-head">
+        <div class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+        <div><b>Asistente de facturación</b><span>Pregunta por días, categorías o tiendas</span></div>
+      </div>
+      <div id="log"><div class="vacio" id="vacio">Escribe una pregunta o elige una sugerencia.<br>Respondo con las mismas cifras del tablero.</div></div>
+      <div class="chips" id="chips"></div>
+      <form id="form">
+        <input type="text" id="q" placeholder="Escribe tu pregunta…" autocomplete="off" maxlength="500" aria-label="Pregunta">
+        <button class="send" id="enviar" aria-label="Enviar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+      </form>
+    </section>
+  </aside>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const fmt0 = new Intl.NumberFormat('es-CO', {maximumFractionDigits: 0});
 const fmt1 = new Intl.NumberFormat('es-CO', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 const cop = (n) => '$ ' + fmt0.format(n);
-const copM = (n) => '$ ' + fmt1.format(n / 1e6) + ' M';
+const ton = (n) => fmt1.format(n) + ' t';
 const fechaCorta = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CO', {day: 'numeric', month: 'short'});
 const fechaDia = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CO', {weekday: 'short', day: 'numeric', month: 'short'});
 
 function el(tag, text, attrs = {}) {
   const e = document.createElement(tag);
-  if (text !== undefined) e.textContent = text;
+  if (text !== undefined && text !== null) e.textContent = text;
   Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
   return e;
 }
+// Las celdas pueden ser texto o nodos DOM.
+function celda(tag, c) { const e = el(tag); if (c instanceof Node) e.append(c); else e.textContent = c; return e; }
 function tabla(t, columnas, filas, pie) {
   t.replaceChildren();
   const thead = el('thead'), tr = el('tr');
   columnas.forEach((c) => tr.append(el('th', c)));
   thead.append(tr); t.append(thead);
   const tb = el('tbody');
-  filas.forEach((f) => { const r = el('tr'); f.forEach((c) => r.append(el('td', c))); tb.append(r); });
+  filas.forEach((f) => { const r = el('tr'); f.forEach((c) => r.append(celda('td', c))); tb.append(r); });
   t.append(tb);
-  if (pie) { const tf = el('tfoot'), r = el('tr'); pie.forEach((c) => r.append(el('td', c))); tf.append(r); t.append(tf); }
+  if (pie) { const tf = el('tfoot'), r = el('tr'); pie.forEach((c) => r.append(celda('td', c))); tf.append(r); t.append(tf); }
 }
+function nombreConBarra(nombre, pct) {
+  const w = el('div', undefined, {class: 'cat'});
+  const bar = el('div', undefined, {class: 'bar'}), i = el('i');
+  i.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
+  bar.append(i); w.append(el('span', nombre), bar);
+  return w;
+}
+function unidad(texto, clase) { return el('span', texto, {class: 'unit ' + clase}); }
 function aviso(texto, clase) {
   const box = $('mensajes'); box.replaceChildren();
   if (texto) box.append(el('div', texto, {class: clase}));
@@ -85,54 +212,74 @@ function aviso(texto, clase) {
 function pintarResumen(d) {
   const p = d.periodos;
   const etq = {
-    dia: d.dia_incluye_no_habiles
-      ? 'Día anterior · ' + fechaDia(p.dia.desde) + ' a ' + fechaDia(p.dia.hasta) + ' (fin de semana / festivo sumado)'
-      : 'Día anterior · ' + fechaDia(p.dia.hasta),
-    mes: 'Acumulado mes · ' + fechaCorta(p.mes.desde) + ' – ' + fechaCorta(p.mes.hasta),
-    anio: 'Acumulado año · ' + fechaCorta(p.anio.desde) + ' – ' + fechaCorta(p.anio.hasta),
+    dia: ['Día anterior', d.dia_incluye_no_habiles
+      ? fechaDia(p.dia.desde) + ' a ' + fechaDia(p.dia.hasta) + ' · incluye fin de semana / festivo'
+      : fechaDia(p.dia.hasta)],
+    mes: ['Acumulado del mes', fechaCorta(p.mes.desde) + ' – ' + fechaCorta(p.mes.hasta)],
+    anio: ['Acumulado del año', fechaCorta(p.anio.desde) + ' – ' + fechaCorta(p.anio.hasta)],
   };
   const k = $('kpis'); k.replaceChildren();
   ['dia', 'mes', 'anio'].forEach((n) => {
-    const c = el('div', undefined, {class: 'card kpi'});
-    c.append(el('div', etq[n], {class: 't'}), el('div', cop(d.total[n].valor), {class: 'v'}),
-             el('div', fmt1.format(d.total[n].peso_ton) + ' t facturadas', {class: 'p'}));
+    const c = el('div', undefined, {class: 'card kpi ' + n});
+    const peso = el('div', undefined, {class: 'p'});
+    const b = el('b', fmt1.format(d.total[n].peso_ton) + ' t'); peso.append(b, ' facturadas');
+    c.append(el('div', etq[n][0], {class: 't'}), el('div', etq[n][1], {class: 'rng'}),
+             el('div', cop(d.total[n].valor), {class: 'v num'}), peso);
     k.append(c);
   });
-  const sum = (n, f) => d.categorias.reduce((a, c) => a + c[n][f], 0);
+
+  // Tabla 1: valor por categoría, con totales (todo en COP)
+  const sum = (n) => d.categorias.reduce((a, c) => a + c[n].valor, 0);
+  const totalAnio = sum('anio') || 1;
   tabla($('t-cat'), ['Categoría', 'Día anterior', 'Acumulado mes', 'Acumulado año'],
-    d.categorias.map((c) => [c.categoria, cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor)]),
-    ['Total', cop(sum('dia', 'valor')), cop(sum('mes', 'valor')), cop(sum('anio', 'valor'))]);
-  $('h-peso').textContent = 'Peso facturado (toneladas) — ' + d.peso_foco.map((x) => x.categoria).join(' y ');
-  tabla($('t-peso'), ['Categoría', 'Día anterior', 'Acumulado mes', 'Acumulado año'],
-    d.peso_foco.map((c) => [c.categoria, fmt1.format(c.dia), fmt1.format(c.mes), fmt1.format(c.anio)]),
-    ['Total', ...['dia', 'mes', 'anio'].map((n) => fmt1.format(d.peso_foco.reduce((a, c) => a + c[n], 0)))]);
-  const carga = d.fecha_carga_vista ? ' · vista cargada ' + d.fecha_carga_vista.replace('T', ' ') : '';
-  $('estado').textContent = 'Datos hasta ' + fechaCorta(p.dia.hasta) + carga + ' · consultado ' + d.datos_cargados_en.slice(11, 16);
+    d.categorias.map((c) => [nombreConBarra(c.categoria, (c.anio.valor / totalAnio) * 100),
+      cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor)]),
+    ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio'))]);
+
+  // Tabla 2: unidades distintas (t y COP) → sin fila de totales
+  const filas = [
+    ...d.peso_foco.map((c) => [c.categoria, unidad('toneladas', 't'), ton(c.dia), ton(c.mes), ton(c.anio)]),
+    ...(d.valor_foco || []).map((c) => [c.categoria, unidad('pesos', 'c'), cop(c.dia), cop(c.mes), cop(c.anio)]),
+  ];
+  $('h-foco').textContent = d.peso_foco.map((x) => x.categoria).join(' y ') + ' en toneladas'
+    + ((d.valor_foco || []).length ? '; ' + d.valor_foco.map((x) => x.categoria).join(' y ') + ' en pesos (COP).' : '.');
+  tabla($('t-foco'), ['Línea', 'Unidad', 'Día anterior', 'Acumulado mes', 'Acumulado año'], filas);
+
+  const carga = d.fecha_carga_vista ? ' · vista cargada ' + d.fecha_carga_vista.replace('T', ' ').slice(0, 16) : '';
+  $('estado').textContent = 'Datos hasta ' + fechaDia(p.dia.hasta) + carga;
+  $('vivo').textContent = 'Actualizado ' + d.datos_cargados_en.slice(11, 16);
+  $('dot').classList.toggle('off', !!d.aviso);
   if (d.aviso) aviso(d.aviso, 'aviso');
   else if (d.sin_facturacion_dia) aviso('No hay facturación registrada para el día hábil ' + fechaDia(p.dia.desde) + '.', 'aviso');
   else aviso('');
 }
 
 function pintarGrafico(serie) {
-  const W = 1100, H = 220, m = {l: 8, r: 8, t: 10, b: 24};
-  const max = Math.max(...serie.map((s) => s.valor), 1);
-  const bw = (W - m.l - m.r) / serie.length;
   const ns = 'http://www.w3.org/2000/svg';
+  const W = 1000, H = 250, m = {l: 54, r: 8, t: 12, b: 26};
+  const max = Math.max(...serie.map((s) => s.valor), 1);
+  const paso = max / 1e6 > 500 ? 250e6 : max / 1e6 > 200 ? 100e6 : max / 1e6 > 80 ? 50e6 : 20e6;
+  const techo = Math.ceil(max / paso) * paso || paso;
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', '100%'); svg.setAttribute('role', 'img');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Facturación por día hábil de los últimos 30 días');
+  const y = (v) => H - m.b - (v / techo) * (H - m.t - m.b);
+  const t = (x, yy, txt, anchor) => { const e = document.createElementNS(ns, 'text'); e.setAttribute('x', x); e.setAttribute('y', yy);
+    if (anchor) e.setAttribute('text-anchor', anchor); e.textContent = txt; svg.append(e); };
+  for (let v = 0; v <= techo + 1; v += paso) {
+    const ln = document.createElementNS(ns, 'line');
+    ln.setAttribute('x1', m.l); ln.setAttribute('x2', W - m.r); ln.setAttribute('y1', y(v)); ln.setAttribute('y2', y(v)); ln.setAttribute('class', 'grid');
+    svg.append(ln); t(m.l - 8, y(v) + 4, (v / 1e6) + ' M', 'end');
+  }
+  const bw = (W - m.l - m.r) / serie.length;
   serie.forEach((s, i) => {
-    const h = (s.valor / max) * (H - m.t - m.b);
     const r = document.createElementNS(ns, 'rect');
-    r.setAttribute('x', m.l + i * bw + 2); r.setAttribute('width', Math.max(bw - 4, 1));
-    r.setAttribute('y', H - m.b - h); r.setAttribute('height', Math.max(h, 0));
-    r.setAttribute('rx', 2); r.setAttribute('fill', 'var(--accent)');
-    const tt = document.createElementNS(ns, 'title'); tt.textContent = fechaCorta(s.fecha) + ': ' + cop(s.valor);
+    const h = y(0) - y(s.valor);
+    r.setAttribute('class', 'b'); r.setAttribute('x', m.l + i * bw + bw * .14); r.setAttribute('width', Math.max(bw * .72, 1));
+    r.setAttribute('y', y(s.valor)); r.setAttribute('height', Math.max(h, 0)); r.setAttribute('rx', 3);
+    const tt = document.createElementNS(ns, 'title'); tt.textContent = fechaDia(s.fecha) + ': ' + cop(s.valor) + ' · ' + ton(s.peso_foco_ton) + ' (acero + cemento)';
     r.append(tt); svg.append(r);
-    if (i % 5 === 0) {
-      const t = document.createElementNS(ns, 'text');
-      t.setAttribute('x', m.l + i * bw); t.setAttribute('y', H - 6); t.textContent = fechaCorta(s.fecha); svg.append(t);
-    }
+    if (i % Math.ceil(serie.length / 8) === 0) t(m.l + i * bw + bw / 2, H - 7, fechaCorta(s.fecha), 'middle');
   });
   $('grafico').replaceChildren(svg);
 }
@@ -146,24 +293,29 @@ async function cargar() {
   try {
     const [r, t] = await Promise.all([api('/api/resumen'), api('/api/tendencia?dias=30')]);
     pintarResumen(r); pintarGrafico(t);
-  } catch (e) { aviso(e.message, 'err'); }
+  } catch (e) { aviso(e.message, 'err'); $('dot').classList.add('off'); $('vivo').textContent = 'Sin conexión'; }
 }
 $('refrescar').onclick = async () => { $('refrescar').disabled = true;
   try { await api('/api/refresh', {method: 'POST'}); } catch (e) { aviso(e.message, 'err'); }
   await cargar(); $('refrescar').disabled = false; };
 
-// ---- Chat
+// ---- Agente (panel lateral)
 const historial = [];
-function burbuja(texto, quien) { const m = el('div', texto, {class: 'msg ' + quien}); $('log').append(m); $('log').scrollTop = 1e9; return m; }
+function burbuja(texto, quien) {
+  const v = $('vacio'); if (v) v.remove();
+  const m = el('div', texto, {class: 'msg ' + quien}); $('log').append(m); $('log').scrollTop = $('log').scrollHeight; return m;
+}
 async function preguntar(texto) {
+  $('enviar').disabled = true;
   burbuja(texto, 'user'); historial.push({role: 'user', content: texto});
-  const espera = burbuja('Consultando…', 'bot');
+  const espera = burbuja('Consultando…', 'bot wait');
   try {
     const r = await api('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mensajes: historial})});
-    espera.textContent = r.respuesta; historial.push({role: 'assistant', content: r.respuesta});
-  } catch (e) { espera.textContent = e.message; historial.pop(); }
+    espera.className = 'msg bot'; espera.textContent = r.respuesta; historial.push({role: 'assistant', content: r.respuesta});
+  } catch (e) { espera.className = 'msg bot'; espera.textContent = e.message; historial.pop(); }
+  $('enviar').disabled = false; $('log').scrollTop = $('log').scrollHeight; $('q').focus();
 }
-$('form').onsubmit = (ev) => { ev.preventDefault(); const q = $('q').value.trim(); if (q) { $('q').value = ''; preguntar(q); } };
+$('form').onsubmit = (ev) => { ev.preventDefault(); const q = $('q').value.trim(); if (q && !$('enviar').disabled) { $('q').value = ''; preguntar(q); } };
 ['¿Cuánto se facturó ayer?', '¿Cuántas toneladas de acero van en el mes?', '¿Qué tienda facturó más este año?', '¿Cómo va el cemento en el año?']
   .forEach((s) => { const b = el('button', s, {type: 'button'}); b.onclick = () => preguntar(s); $('chips').append(b); });
 

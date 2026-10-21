@@ -39,6 +39,7 @@ class Settings:
     anthropic_model: str
     app_user: str
     app_password: str
+    categorias_valor: tuple[str, ...] = ("PRODUCTOS NO SIDOC",)
 
 
 @lru_cache
@@ -66,4 +67,5 @@ def get_settings() -> Settings:
         anthropic_model=e("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
         app_user=e("APP_USER", ""),
         app_password=e("APP_PASSWORD", ""),
+        categorias_valor=tuple(c.upper() for c in _lista(e("CATEGORIAS_VALOR", "PRODUCTOS NO SIDOC"))),
     )

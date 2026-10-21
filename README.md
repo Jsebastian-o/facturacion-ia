@@ -13,7 +13,7 @@ app/
   service.py     reglas de negocio, caché con TTL, resumen / tendencia / consulta libre
   agent.py       agente con tool use (lee del mismo servicio que el tablero)
   main.py        API + autenticación básica
-  static/index.html  dashboard (sin dependencias externas)
+  static/index.html  dashboard con el agente en un panel lateral (sin dependencias externas)
 tests/           pytest (límites de fechas, cálculo contra la muestra, API, agente)
 data/Muestra_vista.csv
 ```
@@ -44,6 +44,9 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
   domingo 1 pertenecen al mes del viernes al que se suman.
 - Las categorías de peso se configuran con `CATEGORIAS_PESO` y coinciden por prefijo
   (`GR_CEMENTO` encuentra `GR_CEMENTOS`).
+- **Segunda tabla (peso y valor):** ACERO SIDOC y GR_CEMENTO van en toneladas y PRODUCTOS NO SIDOC en pesos
+  (`CATEGORIAS_VALOR`). Como las unidades son distintas, esa tabla no tiene fila de totales.
+  La primera tabla (todo en COP) sí la conserva.
 
 ## Cómo se mantiene actualizada
 

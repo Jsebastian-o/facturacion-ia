@@ -57,7 +57,7 @@ Reglas del dato:
 - Los sábados, domingos y festivos de Colombia se suman al día hábil anterior (viernes + sábado + domingo = viernes;
   con lunes festivo, también el lunes). Por eso el "día anterior" de un lunes o de un día tras festivo es ese
   día hábil con el fin de semana incluido, y las consultas por día agrupan por día hábil.
-- El peso está en toneladas. Las categorías con peso destacado son: {', '.join(peso_cats)}.
+- El peso está en toneladas. Las categorías con peso destacado son: {', '.join(peso_cats)}. PRODUCTOS NO SIDOC se reporta en dinero (COP), no en peso.
 - Dimensiones disponibles: fecha, categoría y tienda. No tienes cliente, vendedor ni producto; si lo piden, dilo.
 - Usa SIEMPRE las herramientas para obtener cifras; nunca las inventes ni las estimes de memoria.
 - Formatea los pesos con separador de miles (p. ej. $1.234.567.890) y las toneladas con un decimal.

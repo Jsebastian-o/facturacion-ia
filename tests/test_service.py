@@ -226,3 +226,20 @@ def test_refresco_en_segundo_plano_no_bloquea_ni_recarga_por_peticion():
     s.resumen(); s.resumen(); s.tendencia()
     assert s.repo.llamadas == 1                                  # solo la carga inicial del hilo
     assert s.estado()["refresco_en_segundo_plano"] is True
+
+
+# ------------------------------------------ PRODUCTOS NO SIDOC en dinero (sin sumar con toneladas)
+def test_valor_foco_productos_no_sidoc_en_pesos():
+    filas = [_f("2026-10-19", 1000),
+             ("2026-10-19", "PRODUCTOS NO SIDOC", "T1", 250.0, 99999.0),   # el peso no debe aparecer
+             ("2026-10-01", "PRODUCTOS NO SIDOC", "T1", 50.0, 1.0),
+             ("2026-03-10", "PRODUCTOS NO SIDOC", "T1", 7.0, 1.0)]
+    r = _svc(filas).resumen()
+    assert r["valor_foco"] == [{"categoria": "PRODUCTOS NO SIDOC", "dia": 250.0, "mes": 300.0, "anio": 307.0}]
+    # las filas de peso siguen siendo solo ACERO SIDOC y GR_CEMENTO (toneladas)
+    assert {f["categoria"] for f in r["peso_foco"]} == {"ACERO SIDOC", "GR_CEMENTO"}
+
+
+def test_valor_foco_sin_ventas_devuelve_ceros():
+    r = _svc([_f("2026-10-19", 10)]).resumen()
+    assert r["valor_foco"] == [{"categoria": "PRODUCTOS NO SIDOC", "dia": 0.0, "mes": 0.0, "anio": 0.0}]
