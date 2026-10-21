@@ -295,3 +295,33 @@ def test_api_vista_hoy(monkeypatch):
     assert c.get("/api/tendencia?dias=5&vista=hoy").json()[-1]["fecha"] == "2026-10-20"
     assert c.get("/api/resumen?vista=otra").status_code == 422
     get_settings.cache_clear(); get_service.cache_clear()
+
+
+# ------------------------------------------------------- % de cada categoría sobre el total del año
+def test_pct_anio_por_categoria():
+    filas = [_f("2026-03-10", 750),                                      # ACERO SIDOC
+             ("2026-10-19", "GR_CEMENTOS", "T1", 200.0, 1.0),
+             ("2026-10-19", "OTROS", "T1", 50.0, 1.0),
+             ("2025-12-30", "OTROS", "T1", 5000.0, 1.0)]                 # año anterior: no cuenta
+    r = _svc(filas).resumen()
+    pct = {c["categoria"]: c["pct_anio"] for c in r["categorias"]}
+    assert pct == {"ACERO SIDOC": 75.0, "GR_CEMENTOS": 20.0, "OTROS": 5.0}
+    assert sum(pct.values()) == pytest.approx(100.0)
+    assert [c["categoria"] for c in r["categorias"]][0] == "ACERO SIDOC"  # sigue ordenado por valor del año
+
+
+def test_pct_anio_con_nota_credito_y_sin_ventas():
+    r = _svc([_f("2026-10-19", 300), ("2026-10-19", "OTROS", "T1", -100.0, 0.0)]).resumen()
+    pct = {c["categoria"]: c["pct_anio"] for c in r["categorias"]}
+    assert pct == {"ACERO SIDOC": 150.0, "OTROS": -50.0}                 # el total neto es 200: suma 100 %
+    assert _svc([]).resumen()["categorias"] == []                        # sin ventas no hay filas ni división por cero
+    neto_cero = _svc([_f("2026-10-19", 100), ("2026-10-19", "OTROS", "T1", -100.0, 0.0)]).resumen()
+    assert all(c["pct_anio"] is None for c in neto_cero["categorias"])   # total 0: sin porcentaje
+
+
+def test_pct_anio_en_la_vista_hoy_incluye_hoy():
+    filas = [_f("2026-10-19", 100), ("2026-10-20", "OTROS", "T1", 100.0, 0.0)]
+    pct = {c["categoria"]: c["pct_anio"] for c in _svc(filas).resumen(en_curso=True)["categorias"]}
+    assert pct == {"ACERO SIDOC": 50.0, "OTROS": 50.0}
+    pct = {c["categoria"]: c["pct_anio"] for c in _svc(filas).resumen()["categorias"]}
+    assert pct == {"ACERO SIDOC": 100.0}

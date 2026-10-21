@@ -44,6 +44,8 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
   domingo 1 pertenecen al mes del viernes al que se suman.
 - Las categorías de peso se configuran con `CATEGORIAS_PESO` y coinciden por prefijo
   (`GR_CEMENTO` encuentra `GR_CEMENTOS`).
+- **% del año:** en la tabla por categoría, el valor del acumulado del año de cada categoría dividido entre el total del año
+  (en pesos). Las categorías suman 100 %. Si el total del año no es positivo, se muestra "—". En la pestaña Hoy el año incluye hoy.
 - **Pestaña "Hoy":** muestra la misma información (tarjetas, tablas y gráfica) pero con el día en curso, que es parcial.
   Sirve para seguir el día; el cierre oficial es la pestaña "Resumen", que llega hasta el día anterior.
   El acumulado del mes y del año de esa pestaña incluye lo facturado hoy. Aplica la misma regla de fines de semana y

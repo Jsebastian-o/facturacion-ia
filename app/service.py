@@ -198,6 +198,12 @@ class FacturacionService:
         ]
         categorias.sort(key=lambda x: x["anio"]["valor"], reverse=True)
 
+        # Participación de cada categoría en el total facturado del año (en valor, COP).
+        # Si el total del año no es positivo (sin ventas, o dominado por notas crédito) no hay porcentaje con sentido.
+        total_anio = totales["anio"]["valor"]
+        for c in categorias:
+            c["pct_anio"] = round(c["anio"]["valor"] / total_anio * 100, 2) if total_anio > 0 else None
+
         peso_foco = []
         for cat in self._categorias_peso(df):
             fila = {"categoria": cat}

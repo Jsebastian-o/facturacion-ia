@@ -153,7 +153,7 @@
 
     <section class="card">
       <h2>Facturación por categoría</h2>
-      <p class="hint">Pesos colombianos (COP). La barra muestra la participación de cada categoría en el acumulado del año.</p>
+      <p class="hint">Pesos colombianos (COP). «% del año» es lo que cada categoría representa del total facturado en el año.</p>
       <div class="scroll"><table id="t-cat"></table></div>
     </section>
 
@@ -249,13 +249,14 @@ function pintarResumen(d) {
     k.append(c);
   });
 
-  // Tabla 1: valor por categoría, con totales (todo en COP)
+  // Tabla 1: valor por categoría, con totales (todo en COP) y % que cada una pesa en el año
   const sum = (n) => d.categorias.reduce((a, c) => a + c[n].valor, 0);
-  const totalAnio = sum('anio') || 1;
-  tabla($('t-cat'), ['Categoría', lblDia, 'Acumulado mes', 'Acumulado año'],
-    d.categorias.map((c) => [nombreConBarra(c.categoria, (c.anio.valor / totalAnio) * 100),
-      cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor)]),
-    ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio'))]);
+  const pct = (v) => v === null || v === undefined ? '—' : fmt1.format(v) + ' %';
+  const sumaPct = d.categorias.every((c) => c.pct_anio !== null && c.pct_anio !== undefined) ? 100 : null;
+  tabla($('t-cat'), ['Categoría', lblDia, 'Acumulado mes', 'Acumulado año', '% del año'],
+    d.categorias.map((c) => [nombreConBarra(c.categoria, c.pct_anio || 0),
+      cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor), pct(c.pct_anio)]),
+    ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio')), pct(sumaPct)]);
 
   // Tabla 2: unidades distintas (t y COP) → sin fila de totales
   const filas = [
