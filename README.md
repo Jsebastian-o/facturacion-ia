@@ -46,6 +46,10 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
   (`GR_CEMENTO` encuentra `GR_CEMENTOS`).
 - **% del año:** en la tabla por categoría, el valor del acumulado del año de cada categoría dividido entre el total del año
   (en pesos). Las categorías suman 100 %. Si el total del año no es positivo, se muestra "—". En la pestaña Hoy el año incluye hoy.
+- **Tipo de cliente (canal):** tabla con la facturación por la columna `TipoCliente` de la vista. Se muestran siempre
+  MAYORISTA, MINORISTA y CONSTRUCTORES (`CANALES`), aunque no tengan ventas; la vista trae "CONSTRUCTOR" en singular y se
+  reconoce igual. Cualquier otro valor aparece como fila adicional ("SIN TIPO" si viene vacío), así que el total siempre
+  coincide con el de la tabla por categoría. Incluye "% del año".
 - **Pestaña "Hoy":** muestra la misma información (tarjetas, tablas y gráfica) pero con el día en curso, que es parcial.
   Sirve para seguir el día; el cierre oficial es la pestaña "Resumen", que llega hasta el día anterior.
   El acumulado del mes y del año de esa pestaña incluye lo facturado hoy. Aplica la misma regla de fines de semana y
@@ -57,7 +61,7 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
 
 ## Cómo se mantiene actualizada
 
-Al arrancar, un hilo en segundo plano consulta SQL Server con un solo SELECT agregado por (día, categoría, tienda) desde
+Al arrancar, un hilo en segundo plano consulta SQL Server con un solo SELECT agregado por (día, categoría, tienda, tipo de cliente) desde
 el 1 de enero del año anterior y repite la consulta cada `CACHE_TTL_SECONDS` (60 s por defecto). Las páginas y el chat se
 sirven siempre desde memoria, así que responden al instante sin esperar a la base de datos. El tablero se vuelve a
 pedir solo cada 60 segundos y tiene el botón "Actualizar ahora". Si el servidor no responde, se siguen mostrando los

@@ -40,6 +40,7 @@ class Settings:
     app_user: str
     app_password: str
     categorias_valor: tuple[str, ...] = ("PRODUCTOS NO SIDOC",)
+    canales: tuple[str, ...] = ("MAYORISTA", "MINORISTA", "CONSTRUCTORES")
 
 
 @lru_cache
@@ -68,4 +69,5 @@ def get_settings() -> Settings:
         app_user=e("APP_USER", ""),
         app_password=e("APP_PASSWORD", ""),
         categorias_valor=tuple(c.upper() for c in _lista(e("CATEGORIAS_VALOR", "PRODUCTOS NO SIDOC"))),
+        canales=tuple(c.upper() for c in _lista(e("CANALES", "MAYORISTA,MINORISTA,CONSTRUCTORES"))),
     )

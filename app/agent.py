@@ -28,8 +28,8 @@ TOOLS = [
         "name": "consultar_facturacion",
         "description": (
             "Consulta libre de facturación (COP) y peso (toneladas) en un rango de fechas, agrupada por "
-            "categoria, tienda, dia, mes o ninguno (solo total). Permite filtrar por categoría o tienda "
-            "(coincidencia parcial, sin importar mayúsculas). Solo hay datos hasta el día anterior. "
+            "categoria, tienda, tipo_cliente, dia, mes o ninguno (solo total). Permite filtrar por categoría, tienda o "
+            "tipo de cliente (MAYORISTA, MINORISTA, CONSTRUCTORES; coincidencia parcial, sin importar mayúsculas). Solo hay datos hasta el día anterior. "
             "Los fines de semana y festivos ya vienen sumados al día hábil anterior. No existe detalle por cliente, vendedor ni producto."
         ),
         "input_schema": {
@@ -37,9 +37,10 @@ TOOLS = [
             "properties": {
                 "desde": {"type": "string", "description": "Fecha inicial AAAA-MM-DD (inclusive)."},
                 "hasta": {"type": "string", "description": "Fecha final AAAA-MM-DD (inclusive)."},
-                "agrupar_por": {"type": "string", "enum": ["categoria", "tienda", "dia", "mes", "ninguno"]},
+                "agrupar_por": {"type": "string", "enum": ["categoria", "tienda", "tipo_cliente", "dia", "mes", "ninguno"]},
                 "categoria": {"type": "string", "description": "Filtro opcional, p. ej. 'CEMENTO'."},
                 "tienda": {"type": "string", "description": "Filtro opcional, p. ej. 'PEREIRA'."},
+                "tipo_cliente": {"type": "string", "description": "Filtro opcional por canal: 'MAYORISTA', 'MINORISTA' o 'CONSTRUCTORES'."},
             },
             "required": ["desde", "hasta"],
         },
@@ -58,7 +59,7 @@ Reglas del dato:
   con lunes festivo, también el lunes). Por eso el "día anterior" de un lunes o de un día tras festivo es ese
   día hábil con el fin de semana incluido, y las consultas por día agrupan por día hábil.
 - El peso está en toneladas. Las categorías con peso destacado son: {', '.join(peso_cats)}. PRODUCTOS NO SIDOC se reporta en dinero (COP), no en peso.
-- Dimensiones disponibles: fecha, categoría y tienda. No tienes cliente, vendedor ni producto; si lo piden, dilo.
+- Dimensiones disponibles: fecha, categoría, tienda y tipo de cliente (canal: MAYORISTA, MINORISTA, CONSTRUCTORES). No tienes cliente, vendedor ni producto; si lo piden, dilo.
 - Usa SIEMPRE las herramientas para obtener cifras; nunca las inventes ni las estimes de memoria.
 - Formatea los pesos con separador de miles (p. ej. $1.234.567.890) y las toneladas con un decimal.
 - Si la consulta devuelve notas (ajustes de fechas), menciónalas si cambian la respuesta."""
@@ -75,6 +76,7 @@ def _ejecutar(servicio: FacturacionService, nombre: str, args: dict) -> str:
                 agrupar_por=args.get("agrupar_por", "categoria"),
                 categoria=args.get("categoria"),
                 tienda=args.get("tienda"),
+                tipo_cliente=args.get("tipo_cliente"),
             )
             return json.dumps(res, ensure_ascii=False)
         return json.dumps({"error": f"Herramienta desconocida: {nombre}"})

@@ -78,6 +78,20 @@ class FacturacionService:
     def hoy(self) -> date:
         return self.settings.fecha_hoy or datetime.now(TZ).date()
 
+    def _canal(self, tipo: str) -> str:
+        """Canal configurado al que pertenece un TipoCliente de la vista (acepta singular/plural);
+        si no coincide con ninguno, se conserva tal cual para que los totales sigan cuadrando."""
+        t = (tipo or "").strip().upper()
+        for c in self.settings.canales:
+            if t and (t.startswith(c) or (len(t) >= 6 and c.startswith(t))):
+                return c
+        return t or "SIN TIPO"
+
+    def _preparar(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self._a_dias_habiles(df)
+        df["Canal"] = df["TipoCliente"].map(self._canal) if not df.empty else pd.Series(dtype=object)
+        return df
+
     def _a_dias_habiles(self, df: pd.DataFrame) -> pd.DataFrame:
         """Fecha pasa a ser el día hábil al que pertenece la venta; FechaReal conserva la fecha del documento."""
         df = df.copy()
@@ -108,7 +122,7 @@ class FacturacionService:
                 # hasta es exclusivo: se incluye hoy para la vista "Hoy"; los cálculos de
                 # "día anterior", mes y año lo excluyen porque filtran por fecha real <= ayer.
                 df, fecha_carga = self.repo.cargar(desde, hoy + timedelta(days=1))
-                self._cache = _Cache(self._a_dias_habiles(df), hoy, datetime.now(TZ), fecha_carga,
+                self._cache = _Cache(self._preparar(df), hoy, datetime.now(TZ), fecha_carga,
                                      time.monotonic() + self.settings.cache_ttl_seconds)
             except Exception as exc:  # noqa: BLE001
                 if c is None:
@@ -204,6 +218,24 @@ class FacturacionService:
         for c in categorias:
             c["pct_anio"] = round(c["anio"]["valor"] / total_anio * 100, 2) if total_anio > 0 else None
 
+        # Facturación por tipo de cliente (canal): los configurados siempre, en su orden; luego cualquier otro.
+        canales = []
+        for nombre, (desde, hasta) in per.items():
+            sub = self._rango(df, desde, hasta)
+            for canal, g in sub.groupby("Canal"):
+                fila = next((c for c in canales if c["canal"] == canal), None)
+                if fila is None:
+                    fila = {"canal": canal, **{p: vacio for p in per}}
+                    canales.append(fila)
+                fila[nombre] = _vp(g["Valor"].sum(), g["Peso"].sum())
+        for canal in self.settings.canales:
+            if not any(c["canal"] == canal for c in canales):
+                canales.append({"canal": canal, **{p: vacio for p in per}})
+        orden = {c: i for i, c in enumerate(self.settings.canales)}
+        canales.sort(key=lambda c: (orden.get(c["canal"], len(orden)), -c["anio"]["valor"]))
+        for c in canales:
+            c["pct_anio"] = round(c["anio"]["valor"] / total_anio * 100, 2) if total_anio > 0 else None
+
         peso_foco = []
         for cat in self._categorias_peso(df):
             fila = {"categoria": cat}
@@ -227,6 +259,7 @@ class FacturacionService:
             "dia_incluye_no_habiles": dia_desde != dia_hasta,
             "total": totales,
             "categorias": categorias,
+            "canales": canales,
             "peso_foco": peso_foco,
             "valor_foco": valor_foco,
             "sin_facturacion_dia": totales["dia"]["valor"] == 0 and totales["dia"]["peso_ton"] == 0,
@@ -263,7 +296,7 @@ class FacturacionService:
     # --------------------------------------------------- consulta libre (agente)
     def consultar(self, desde: date, hasta: date, agrupar_por: str = "categoria",
                   categoria: str | None = None, tienda: str | None = None,
-                  limite: int = 50) -> dict:
+                  tipo_cliente: str | None = None, limite: int = 50) -> dict:
         cache = self._datos(self.hoy())
         df = cache.df
         ayer = self.hoy() - timedelta(days=1)
@@ -291,10 +324,13 @@ class FacturacionService:
         if tienda:
             sub = sub[sub["Tienda"].str.upper().str.contains(tienda.strip().upper(), regex=False)]
 
-        claves = {"categoria": sub["Categoria"], "tienda": sub["Tienda"],
+        if tipo_cliente:
+            sub = sub[sub["Canal"].str.contains(tipo_cliente.strip().upper(), regex=False)]
+
+        claves = {"categoria": sub["Categoria"], "tienda": sub["Tienda"], "tipo_cliente": sub["Canal"],
                   "dia": sub["Fecha"].dt.strftime("%Y-%m-%d"), "mes": sub["Fecha"].dt.strftime("%Y-%m")}
         if agrupar_por not in claves and agrupar_por != "ninguno":
-            raise ValueError("agrupar_por debe ser: categoria, tienda, dia, mes o ninguno.")
+            raise ValueError("agrupar_por debe ser: categoria, tienda, tipo_cliente, dia, mes o ninguno.")
 
         filas = []
         if agrupar_por != "ninguno":
@@ -307,7 +343,7 @@ class FacturacionService:
 
         return {
             "desde": desde.isoformat(), "hasta": hasta.isoformat(), "agrupar_por": agrupar_por,
-            "filtros": {"categoria": categoria, "tienda": tienda},
+            "filtros": {"categoria": categoria, "tienda": tienda, "tipo_cliente": tipo_cliente},
             "filas": filas,
             "total": _vp(sub["Valor"].sum(), sub["Peso"].sum()),
             "notas": notas,

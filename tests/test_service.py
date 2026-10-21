@@ -28,7 +28,10 @@ class RepoFalso:
 
     def cargar(self, desde, hasta):
         self.llamadas += 1
-        df = pd.DataFrame(self.filas, columns=COLUMNAS)
+        # las filas de prueba son (fecha, categoria, tienda, valor, peso) [+ tipo de cliente opcional al final]
+        filas = [(f, c, t, "MAYORISTA", v, p) if len(r) == 5 else (r[0], r[1], r[2], r[5], r[3], r[4])
+                 for r in self.filas for f, c, t, v, p in [r[:5]]]
+        df = pd.DataFrame(filas, columns=COLUMNAS)
         df["Fecha"] = pd.to_datetime(df["Fecha"])
         df = df[(df.Fecha >= pd.Timestamp(desde)) & (df.Fecha < pd.Timestamp(hasta))]
         return df, datetime(2026, 10, 20, 3, 0)
@@ -325,3 +328,57 @@ def test_pct_anio_en_la_vista_hoy_incluye_hoy():
     assert pct == {"ACERO SIDOC": 50.0, "OTROS": 50.0}
     pct = {c["categoria"]: c["pct_anio"] for c in _svc(filas).resumen()["categorias"]}
     assert pct == {"ACERO SIDOC": 100.0}
+
+
+# ------------------------------------------------------------ facturación por tipo de cliente (canal)
+def _fc(fecha, valor, tipo, cat="ACERO SIDOC"):
+    return (fecha, cat, "T1", float(valor), float(valor) * 10, tipo)      # 6.º elemento = TipoCliente
+
+
+def test_canales_en_orden_con_ceros_y_singular_plural():
+    filas = [_fc("2026-10-19", 600, "MAYORISTA"), _fc("2026-10-19", 100, "MINORISTA"),
+             _fc("2026-10-19", 300, "CONSTRUCTOR"),                       # la vista trae el singular
+             _fc("2026-03-02", 1000, "MAYORISTA")]
+    r = _svc(filas).resumen()
+    assert [c["canal"] for c in r["canales"]] == ["MAYORISTA", "MINORISTA", "CONSTRUCTORES"]
+    c = {x["canal"]: x for x in r["canales"]}
+    assert c["CONSTRUCTORES"]["dia"]["valor"] == 300.0
+    assert c["MAYORISTA"]["dia"]["valor"] == 600.0 and c["MAYORISTA"]["anio"]["valor"] == 1600.0
+    assert c["MAYORISTA"]["mes"]["valor"] == 600.0
+    assert c["MAYORISTA"]["pct_anio"] == 80.0 and c["MINORISTA"]["pct_anio"] == 5.0
+    assert c["CONSTRUCTORES"]["pct_anio"] == 15.0
+    assert c["MAYORISTA"]["dia"]["peso_ton"] == 6.0
+
+
+def test_canales_siempre_aparecen_aunque_no_tengan_ventas():
+    r = _svc([_fc("2026-10-19", 50, "MAYORISTA")]).resumen()
+    c = {x["canal"]: x for x in r["canales"]}
+    assert list(c) == ["MAYORISTA", "MINORISTA", "CONSTRUCTORES"]
+    assert c["MINORISTA"]["anio"]["valor"] == 0.0 and c["MINORISTA"]["pct_anio"] == 0.0
+    sin_ventas = _svc([]).resumen()
+    assert [x["canal"] for x in sin_ventas["canales"]] == ["MAYORISTA", "MINORISTA", "CONSTRUCTORES"]
+    assert all(x["pct_anio"] is None for x in sin_ventas["canales"])      # total 0: sin porcentaje
+
+
+def test_canales_otros_valores_y_totales_cuadran_con_categorias():
+    filas = [_fc("2026-10-19", 500, "MAYORISTA"), _fc("2026-10-19", 70, "INDUSTRIAL"),
+             _fc("2026-10-19", 30, "", cat="OTROS"),                      # sin tipo en la vista
+             _fc("2026-10-19", -20, "MINORISTAS"),                        # nota crédito, plural
+             _fc("2026-10-20", 9999, "MAYORISTA")]                        # hoy: no entra al cierre
+    r = _svc(filas).resumen()
+    assert [c["canal"] for c in r["canales"]] == ["MAYORISTA", "MINORISTA", "CONSTRUCTORES", "INDUSTRIAL", "SIN TIPO"]
+    for periodo in ("dia", "mes", "anio"):
+        por_canal = sum(c[periodo]["valor"] for c in r["canales"])
+        por_categoria = sum(c[periodo]["valor"] for c in r["categorias"])
+        assert por_canal == por_categoria == r["total"][periodo]["valor"]
+    hoy = _svc(filas).resumen(en_curso=True)
+    assert {c["canal"]: c["dia"]["valor"] for c in hoy["canales"]}["MAYORISTA"] == 9999.0
+
+
+def test_consultar_por_tipo_de_cliente():
+    filas = [_fc("2026-10-19", 600, "MAYORISTA"), _fc("2026-10-19", 300, "CONSTRUCTOR"), _fc("2026-10-19", 100, "MINORISTA")]
+    s = _svc(filas)
+    r = s.consultar(date(2026, 10, 19), date(2026, 10, 19), "tipo_cliente")
+    assert [(f["grupo"], f["valor"]) for f in r["filas"]] == [("MAYORISTA", 600.0), ("CONSTRUCTORES", 300.0), ("MINORISTA", 100.0)]
+    r = s.consultar(date(2026, 10, 19), date(2026, 10, 19), "ninguno", tipo_cliente="construct")
+    assert r["total"]["valor"] == 300.0

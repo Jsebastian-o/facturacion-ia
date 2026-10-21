@@ -164,6 +164,12 @@
     </section>
 
     <section class="card">
+      <h2>Facturación por tipo de cliente</h2>
+      <p class="hint">Pesos colombianos (COP) por canal de venta. «% del año» es lo que cada canal representa del total facturado en el año.</p>
+      <div class="scroll"><table id="t-canal"></table></div>
+    </section>
+
+    <section class="card">
       <h2>Facturación por día hábil · últimos 30 días</h2>
       <p class="hint" id="h-graf"></p>
       <div id="grafico"></div>
@@ -266,6 +272,14 @@ function pintarResumen(d) {
   $('h-foco').textContent = d.peso_foco.map((x) => x.categoria).join(' y ') + ' en toneladas'
     + ((d.valor_foco || []).length ? '; ' + d.valor_foco.map((x) => x.categoria).join(' y ') + ' en pesos (COP).' : '.');
   tabla($('t-foco'), ['Línea', 'Unidad', lblDia, 'Acumulado mes', 'Acumulado año'], filas);
+
+  // Tabla 3: facturación por tipo de cliente (canal). Los canales suman el mismo total que la tabla por categoría.
+  const sumC = (n) => d.canales.reduce((a, c) => a + c[n].valor, 0);
+  const sumaPctC = d.canales.every((c) => c.pct_anio !== null && c.pct_anio !== undefined) ? 100 : null;
+  tabla($('t-canal'), ['Tipo de cliente', lblDia, 'Acumulado mes', 'Acumulado año', '% del año'],
+    d.canales.map((c) => [nombreConBarra(c.canal, c.pct_anio || 0),
+      cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor), pct(c.pct_anio)]),
+    ['Total', cop(sumC('dia')), cop(sumC('mes')), cop(sumC('anio')), pct(sumaPctC)]);
 
   $('h-graf').textContent = 'Eje en millones de pesos (M). Los fines de semana y festivos están sumados al día hábil anterior.'
     + (hoy ? ' La barra naranja es hoy y está incompleta.' : ' Pasa el cursor sobre una barra para ver el valor.');
