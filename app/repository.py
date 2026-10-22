@@ -1,7 +1,7 @@
 """Acceso a datos.
 
 Ambos repositorios devuelven la facturación ya agregada a nivel
-(Fecha, Categoria, Tienda, TipoCliente) con las columnas Valor y Peso, más la fecha de la
+(Fecha, Categoria, Subcategoria, Tienda, TipoCliente) con las columnas Valor y Peso, más la fecha de la
 última carga de la vista. Así no se traen las líneas de factura al servicio web.
 
 El acceso a SQL Server es un único SELECT parametrizado (no requiere permisos
@@ -18,7 +18,7 @@ import pandas as pd
 
 from .config import Settings
 
-COLUMNAS = ["Fecha", "Categoria", "Tienda", "TipoCliente", "Valor", "Peso"]
+COLUMNAS = ["Fecha", "Categoria", "Subcategoria", "Tienda", "TipoCliente", "Valor", "Peso"]
 _VISTA_VALIDA = re.compile(r"^[A-Za-z0-9_\.\[\]]+$")
 
 
@@ -30,12 +30,14 @@ class Repository(Protocol):
 def _normalizar(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.normalize()
-    for col in ("Categoria", "Tienda", "TipoCliente"):
+    for col in ("Categoria", "Subcategoria", "Tienda", "TipoCliente"):
         df[col] = df[col].fillna("").astype(str).str.strip()
     df["TipoCliente"] = df["TipoCliente"].str.upper()
+    df["Subcategoria"] = df["Subcategoria"].str.upper()
     df.loc[df["Categoria"] == "", "Categoria"] = "SIN CATEGORIA"
     df.loc[df["Tienda"] == "", "Tienda"] = "SIN TIENDA"
     df.loc[df["TipoCliente"] == "", "TipoCliente"] = "SIN TIPO"
+    df.loc[df["Subcategoria"] == "", "Subcategoria"] = "SIN SUBCATEGORIA"
     df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0).astype(float)
     df["Peso"] = pd.to_numeric(df["Peso"], errors="coerce").fillna(0.0).astype(float)
     return df[COLUMNAS].reset_index(drop=True)
@@ -65,6 +67,7 @@ class SqlServerRepository:
         sql = f"""
             SELECT CAST(Fecha AS date)                              AS Fecha,
                    LTRIM(RTRIM(Categoria))                          AS Categoria,
+                   LTRIM(RTRIM(DescCriterioMayorItem3))             AS Subcategoria,
                    LTRIM(RTRIM(Tienda))                             AS Tienda,
                    LTRIM(RTRIM(TipoCliente))                        AS TipoCliente,
                    SUM(ValorSubtotalLocal)                          AS Valor,
@@ -72,7 +75,8 @@ class SqlServerRepository:
                    MAX(FechaCarga)                                  AS FechaCarga
             FROM {self.s.view_name}
             WHERE Fecha >= ? AND Fecha < ? AND LTRIM(RTRIM(Estado)) IN ({marcas})
-            GROUP BY CAST(Fecha AS date), LTRIM(RTRIM(Categoria)), LTRIM(RTRIM(Tienda)), LTRIM(RTRIM(TipoCliente))
+            GROUP BY CAST(Fecha AS date), LTRIM(RTRIM(Categoria)), LTRIM(RTRIM(DescCriterioMayorItem3)),
+                     LTRIM(RTRIM(Tienda)), LTRIM(RTRIM(TipoCliente))
         """
         params = [desde, hasta, *estados]
         with pyodbc.connect(self._conn_str(), timeout=30) as conn:
@@ -98,7 +102,8 @@ class CsvRepository:
         raw = pd.read_csv(self.path, sep=";", encoding="utf-8-sig", dtype=str)
         raw["Fecha"] = pd.to_datetime(raw["Fecha"].str.strip()).dt.normalize()
         raw["Estado"] = raw["Estado"].fillna("").str.strip().str.lower()
-        for col in ("Categoria", "Tienda", "TipoCliente"):
+        raw["Subcategoria"] = raw["DescCriterioMayorItem3"]
+        for col in ("Categoria", "Subcategoria", "Tienda", "TipoCliente"):
             raw[col] = raw[col].fillna("").str.strip()
         raw["Valor"] = pd.to_numeric(raw["ValorSubtotalLocal"], errors="coerce").fillna(0.0)
         raw["Peso"] = pd.to_numeric(raw["Peso"], errors="coerce").fillna(0.0)
@@ -108,7 +113,7 @@ class CsvRepository:
         if sel.empty:
             return pd.DataFrame(columns=COLUMNAS), None
         fecha_carga = pd.to_datetime(sel["FechaCarga"]).max().to_pydatetime()
-        agg = sel.groupby(["Fecha", "Categoria", "Tienda", "TipoCliente"], as_index=False)[["Valor", "Peso"]].sum()
+        agg = sel.groupby(["Fecha", "Categoria", "Subcategoria", "Tienda", "TipoCliente"], as_index=False)[["Valor", "Peso"]].sum()
         return _normalizar(agg), fecha_carga
 
 

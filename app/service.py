@@ -198,16 +198,22 @@ class FacturacionService:
         per = self.periodos(corte)
 
         por_cat: dict[str, dict] = {}
+        por_sub: dict[str, dict] = {}   # categoría -> subcategoría -> período -> {valor, peso_ton}
         totales: dict[str, dict] = {}
         for nombre, (desde, hasta) in per.items():
             sub = self._rango(df, desde, hasta)
             totales[nombre] = _vp(sub["Valor"].sum(), sub["Peso"].sum())
             for cat, g in sub.groupby("Categoria"):
                 por_cat.setdefault(cat, {})[nombre] = _vp(g["Valor"].sum(), g["Peso"].sum())
+            for (cat, sc), g in sub.groupby(["Categoria", "Subcategoria"]):
+                por_sub.setdefault(cat, {}).setdefault(sc, {})[nombre] = _vp(g["Valor"].sum(), g["Peso"].sum())
 
         vacio = _vp(0, 0)
         categorias = [
-            {"categoria": cat, **{p: datos.get(p, vacio) for p in per}}
+            {"categoria": cat, **{p: datos.get(p, vacio) for p in per},
+             "subcategorias": sorted(
+                 ({"subcategoria": sc, **{p: d.get(p, vacio) for p in per}} for sc, d in por_sub.get(cat, {}).items()),
+                 key=lambda x: x["anio"]["valor"], reverse=True)}
             for cat, datos in por_cat.items()
         ]
         categorias.sort(key=lambda x: x["anio"]["valor"], reverse=True)
@@ -217,6 +223,8 @@ class FacturacionService:
         total_anio = totales["anio"]["valor"]
         for c in categorias:
             c["pct_anio"] = round(c["anio"]["valor"] / total_anio * 100, 2) if total_anio > 0 else None
+            for sc in c["subcategorias"]:    # el % de cada subcategoría es sobre el mismo total del año
+                sc["pct_anio"] = round(sc["anio"]["valor"] / total_anio * 100, 2) if total_anio > 0 else None
 
         # Facturación por tipo de cliente (canal): los configurados siempre, en su orden; luego cualquier otro.
         canales = []
@@ -296,7 +304,7 @@ class FacturacionService:
     # --------------------------------------------------- consulta libre (agente)
     def consultar(self, desde: date, hasta: date, agrupar_por: str = "categoria",
                   categoria: str | None = None, tienda: str | None = None,
-                  tipo_cliente: str | None = None, limite: int = 50) -> dict:
+                  tipo_cliente: str | None = None, subcategoria: str | None = None, limite: int = 50) -> dict:
         cache = self._datos(self.hoy())
         df = cache.df
         ayer = self.hoy() - timedelta(days=1)
@@ -326,11 +334,13 @@ class FacturacionService:
 
         if tipo_cliente:
             sub = sub[sub["Canal"].str.contains(tipo_cliente.strip().upper(), regex=False)]
+        if subcategoria:
+            sub = sub[sub["Subcategoria"].str.contains(subcategoria.strip().upper(), regex=False)]
 
-        claves = {"categoria": sub["Categoria"], "tienda": sub["Tienda"], "tipo_cliente": sub["Canal"],
+        claves = {"categoria": sub["Categoria"], "tienda": sub["Tienda"], "tipo_cliente": sub["Canal"], "subcategoria": sub["Subcategoria"],
                   "dia": sub["Fecha"].dt.strftime("%Y-%m-%d"), "mes": sub["Fecha"].dt.strftime("%Y-%m")}
         if agrupar_por not in claves and agrupar_por != "ninguno":
-            raise ValueError("agrupar_por debe ser: categoria, tienda, tipo_cliente, dia, mes o ninguno.")
+            raise ValueError("agrupar_por debe ser: categoria, subcategoria, tienda, tipo_cliente, dia, mes o ninguno.")
 
         filas = []
         if agrupar_por != "ninguno":
@@ -343,7 +353,7 @@ class FacturacionService:
 
         return {
             "desde": desde.isoformat(), "hasta": hasta.isoformat(), "agrupar_por": agrupar_por,
-            "filtros": {"categoria": categoria, "tienda": tienda, "tipo_cliente": tipo_cliente},
+            "filtros": {"categoria": categoria, "subcategoria": subcategoria, "tienda": tienda, "tipo_cliente": tipo_cliente},
             "filas": filas,
             "total": _vp(sub["Valor"].sum(), sub["Peso"].sum()),
             "notas": notas,

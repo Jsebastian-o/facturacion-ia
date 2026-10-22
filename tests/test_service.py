@@ -28,9 +28,9 @@ class RepoFalso:
 
     def cargar(self, desde, hasta):
         self.llamadas += 1
-        # las filas de prueba son (fecha, categoria, tienda, valor, peso) [+ tipo de cliente opcional al final]
-        filas = [(f, c, t, "MAYORISTA", v, p) if len(r) == 5 else (r[0], r[1], r[2], r[5], r[3], r[4])
-                 for r in self.filas for f, c, t, v, p in [r[:5]]]
+        # filas de prueba: (fecha, categoria, tienda, valor, peso [, tipo_cliente [, subcategoria]])
+        filas = [(r[0], r[1], r[6] if len(r) > 6 else "GENERAL", r[2], r[5] if len(r) > 5 else "MAYORISTA", r[3], r[4])
+                 for r in self.filas]
         df = pd.DataFrame(filas, columns=COLUMNAS)
         df["Fecha"] = pd.to_datetime(df["Fecha"])
         df = df[(df.Fecha >= pd.Timestamp(desde)) & (df.Fecha < pd.Timestamp(hasta))]
@@ -382,3 +382,61 @@ def test_consultar_por_tipo_de_cliente():
     assert [(f["grupo"], f["valor"]) for f in r["filas"]] == [("MAYORISTA", 600.0), ("CONSTRUCTORES", 300.0), ("MINORISTA", 100.0)]
     r = s.consultar(date(2026, 10, 19), date(2026, 10, 19), "ninguno", tipo_cliente="construct")
     assert r["total"]["valor"] == 300.0
+
+
+# ------------------------------------------------------------ subcategorías (DescCriterioMayorItem3)
+def _fs(fecha, valor, cat, sub):
+    return (fecha, cat, "T1", float(valor), float(valor) * 10, "MAYORISTA", sub)
+
+
+def test_subcategorias_suman_la_categoria_y_se_ordenan():
+    filas = [_fs("2026-10-19", 500, "ACERO SIDOC", "CORRUGADA"), _fs("2026-10-19", 100, "ACERO SIDOC", "CHIPAS"),
+             _fs("2026-10-01", 50, "ACERO SIDOC", "CHIPAS"), _fs("2026-03-05", 350, "ACERO SIDOC", "CORRUGADA"),
+             _fs("2026-10-19", 200, "GR_CEMENTOS", "CEMENTO CSM"), _fs("2026-10-20", 999, "ACERO SIDOC", "CHIPAS")]
+    r = _svc(filas).resumen()
+    acero = next(c for c in r["categorias"] if c["categoria"] == "ACERO SIDOC")
+    subs = {x["subcategoria"]: x for x in acero["subcategorias"]}
+    assert [x["subcategoria"] for x in acero["subcategorias"]] == ["CORRUGADA", "CHIPAS"]   # por valor del año
+    assert subs["CORRUGADA"]["dia"]["valor"] == 500 and subs["CORRUGADA"]["anio"]["valor"] == 850
+    assert subs["CHIPAS"]["dia"]["valor"] == 100 and subs["CHIPAS"]["mes"]["valor"] == 150
+    for periodo in ("dia", "mes", "anio"):                                                   # cuadran con la categoría
+        assert sum(x[periodo]["valor"] for x in acero["subcategorias"]) == acero[periodo]["valor"]
+    total_anio = r["total"]["anio"]["valor"]                                                 # 1200
+    assert subs["CORRUGADA"]["pct_anio"] == round(850 / total_anio * 100, 2)
+    assert sum(x["pct_anio"] for x in acero["subcategorias"]) == pytest.approx(acero["pct_anio"], abs=0.01)
+    cem = next(c for c in r["categorias"] if c["categoria"] == "GR_CEMENTOS")
+    assert [x["subcategoria"] for x in cem["subcategorias"]] == ["CEMENTO CSM"]
+
+
+def test_subcategorias_en_la_vista_hoy_y_sin_ventas():
+    filas = [_fs("2026-10-19", 100, "ACERO SIDOC", "CORRUGADA"), _fs("2026-10-20", 40, "ACERO SIDOC", "CHIPAS")]
+    cierre = _svc(filas).resumen()["categorias"][0]
+    hoy = _svc(filas).resumen(en_curso=True)["categorias"][0]
+    assert [x["subcategoria"] for x in cierre["subcategorias"]] == ["CORRUGADA"]             # hoy no entra al cierre
+    d = {x["subcategoria"]: x for x in hoy["subcategorias"]}
+    assert d["CHIPAS"]["dia"]["valor"] == 40 and d["CORRUGADA"]["dia"]["valor"] == 0         # sin ventas hoy: en cero
+    assert _svc([]).resumen()["categorias"] == []
+
+
+def test_consultar_por_subcategoria():
+    filas = [_fs("2026-10-19", 500, "ACERO SIDOC", "CORRUGADA"), _fs("2026-10-19", 100, "ACERO SIDOC", "CHIPAS SIDOC P2")]
+    s = _svc(filas)
+    r = s.consultar(date(2026, 10, 19), date(2026, 10, 19), "subcategoria")
+    assert [(f["grupo"], f["valor"]) for f in r["filas"]] == [("CORRUGADA", 500.0), ("CHIPAS SIDOC P2", 100.0)]
+    assert s.consultar(date(2026, 10, 19), date(2026, 10, 19), "ninguno", subcategoria="chipas")["total"]["valor"] == 100.0
+
+
+def test_subcategorias_de_la_muestra_coinciden_con_calculo_independiente(monkeypatch):
+    monkeypatch.setenv("DATA_SOURCE", "csv"); monkeypatch.setenv("FECHA_HOY", "2026-10-20")
+    get_settings.cache_clear()
+    from app.repository import crear_repositorio
+    st = get_settings()
+    r = FacturacionService(crear_repositorio(st), st).resumen()
+    df = pd.read_csv(CSV, sep=";", encoding="utf-8-sig", dtype=str)
+    df = df[(df["Estado"].str.strip() == "Aprobado") & (df["Fecha"] == "2026-10-19")]
+    esperado = df.assign(v=df["ValorSubtotalLocal"].astype(float), c=df["Categoria"].str.strip(),
+                         s=df["DescCriterioMayorItem3"].str.strip()).groupby(["c", "s"])["v"].sum()
+    obtenido = {(c["categoria"], x["subcategoria"]): x["dia"]["valor"] for c in r["categorias"] for x in c["subcategorias"]}
+    assert obtenido == pytest.approx(esperado.to_dict(), abs=0.01)
+    assert len(obtenido) == len(esperado) and len(esperado) > 10                             # ninguna subcategoría se pierde
+    get_settings.cache_clear()

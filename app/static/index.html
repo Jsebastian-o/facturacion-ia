@@ -66,9 +66,7 @@
   .kpi .t{color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
   .kpi .rng{color:var(--mute);font-size:12.5px;margin-top:2px;min-height:19px}
   /* el tamaño se ajusta al ancho de la tarjeta para que cifras de cientos de miles de millones quepan en una línea */
-  .kpi .v{font-size:clamp(20px,9cqw,30px);line-height:1.15;font-weight:700;margin:8px 0 2px;letter-spacing:-.4px;white-space:nowrap}
-  .kpi .p{color:var(--mute);font-size:13.5px}
-  .kpi .p b{color:var(--ink);font-weight:650}
+  .kpi .v{font-size:clamp(20px,9cqw,30px);line-height:1.15;font-weight:700;margin:8px 0 4px;letter-spacing:-.4px;white-space:nowrap}
 
   /* ---------- tablas ---------- */
   .scroll{overflow-x:auto}
@@ -83,6 +81,18 @@
   .cat{display:grid;gap:5px;min-width:170px}
   .cat .bar{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
   .cat .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand2),var(--brand));border-radius:3px}
+  /* filas desplegables: categoría (+/−) → subcategorías */
+  .catcell{display:flex;align-items:center;gap:10px}
+  .tog{width:24px;height:24px;flex:none;display:inline-grid;place-items:center;padding:0;border-radius:7px;border:1px solid var(--line);
+       background:var(--surface2);color:var(--ink);font-weight:700;font-size:16px;line-height:1;transition:.15s}
+  .tog:hover,.tog:focus-visible{border-color:var(--brand2);color:var(--brand2);outline:0}
+  .tog-ph{width:24px;flex:none}
+  tr.cat-row.has-sub{cursor:pointer}
+  tr.cat-row.abierta td{background:var(--surface2)}
+  tr.sub[hidden]{display:none}
+  tr.sub td{background:var(--surface2);color:var(--mute);font-size:13.5px;padding-top:8px;padding-bottom:8px}
+  tr.sub td:first-child{padding-left:46px;color:var(--ink)}
+  tr.sub td:first-child::before{content:"↳";color:var(--mute);margin-right:8px}
   .unit{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;letter-spacing:.3px}
   .unit.t{background:rgba(27,108,168,.13);color:var(--brand2)}
   .unit.c{background:rgba(238,125,26,.15);color:var(--accent)}
@@ -153,7 +163,7 @@
 
     <section class="card">
       <h2>Facturación por categoría</h2>
-      <p class="hint">Pesos colombianos (COP). «% del año» es lo que cada categoría representa del total facturado en el año.</p>
+      <p class="hint">Pesos colombianos (COP). «% del año» es lo que cada categoría representa del total facturado en el año. Pulsa <b>+</b> para ver las subcategorías.</p>
       <div class="scroll"><table id="t-cat"></table></div>
     </section>
 
@@ -219,6 +229,43 @@ function tabla(t, columnas, filas, pie) {
   t.append(tb);
   if (pie) { const tf = el('tfoot'), r = el('tr'); pie.forEach((c) => r.append(celda('td', c))); tf.append(r); t.append(tf); }
 }
+// Categorías abiertas (se conserva al refrescar cada 60 s y al cambiar de pestaña)
+const abiertas = new Set();
+function tablaCategorias(t, columnas, categorias, pie, fmtPct) {
+  t.replaceChildren();
+  const thead = el('thead'), htr = el('tr');
+  columnas.forEach((c) => htr.append(el('th', c)));
+  thead.append(htr); t.append(thead);
+  const tb = el('tbody');
+  categorias.forEach((c) => {
+    const subs = c.subcategorias || [];
+    const fila = el('tr', undefined, {class: 'cat-row' + (subs.length ? ' has-sub' : '')});
+    const celdaNombre = el('td'), caja = el('div', undefined, {class: 'catcell'});
+    const tog = subs.length ? el('button', '+', {type: 'button', class: 'tog', 'aria-expanded': 'false',
+      'aria-label': 'Mostrar subcategorías de ' + c.categoria}) : el('span', undefined, {class: 'tog-ph'});
+    caja.append(tog, nombreConBarra(c.categoria, c.pct_anio || 0)); celdaNombre.append(caja); fila.append(celdaNombre);
+    [cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor), fmtPct(c.pct_anio)].forEach((v) => fila.append(el('td', v)));
+    tb.append(fila);
+    const filasSub = subs.map((x) => {
+      const r = el('tr', undefined, {class: 'sub'}); r.hidden = true;
+      r.append(el('td', x.subcategoria), el('td', cop(x.dia.valor)), el('td', cop(x.mes.valor)),
+               el('td', cop(x.anio.valor)), el('td', fmtPct(x.pct_anio)));
+      tb.append(r); return r;
+    });
+    const poner = (abierta) => {
+      filasSub.forEach((r) => { r.hidden = !abierta; });
+      fila.classList.toggle('abierta', abierta);
+      if (subs.length) { tog.textContent = abierta ? '−' : '+'; tog.setAttribute('aria-expanded', String(abierta));
+        tog.setAttribute('aria-label', (abierta ? 'Ocultar' : 'Mostrar') + ' subcategorías de ' + c.categoria); }
+    };
+    if (subs.length) {
+      fila.onclick = () => { const ab = !abiertas.has(c.categoria); ab ? abiertas.add(c.categoria) : abiertas.delete(c.categoria); poner(ab); };
+      poner(abiertas.has(c.categoria));
+    }
+  });
+  t.append(tb);
+  if (pie) { const tf = el('tfoot'), r = el('tr'); pie.forEach((c) => r.append(el('td', c))); tf.append(r); t.append(tf); }
+}
 function nombreConBarra(nombre, pct) {
   const w = el('div', undefined, {class: 'cat'});
   const bar = el('div', undefined, {class: 'bar'}), i = el('i');
@@ -248,10 +295,8 @@ function pintarResumen(d) {
   const k = $('kpis'); k.replaceChildren();
   ['dia', 'mes', 'anio'].forEach((n) => {
     const c = el('div', undefined, {class: 'card kpi ' + n});
-    const peso = el('div', undefined, {class: 'p'});
-    const b = el('b', fmt1.format(d.total[n].peso_ton) + ' t'); peso.append(b, ' facturadas');
     c.append(el('div', etq[n][0], {class: 't'}), el('div', etq[n][1], {class: 'rng'}),
-             el('div', cop(d.total[n].valor), {class: 'v num'}), peso);
+             el('div', cop(d.total[n].valor), {class: 'v num'}));
     k.append(c);
   });
 
@@ -259,10 +304,8 @@ function pintarResumen(d) {
   const sum = (n) => d.categorias.reduce((a, c) => a + c[n].valor, 0);
   const pct = (v) => v === null || v === undefined ? '—' : fmt1.format(v) + ' %';
   const sumaPct = d.categorias.every((c) => c.pct_anio !== null && c.pct_anio !== undefined) ? 100 : null;
-  tabla($('t-cat'), ['Categoría', lblDia, 'Acumulado mes', 'Acumulado año', '% del año'],
-    d.categorias.map((c) => [nombreConBarra(c.categoria, c.pct_anio || 0),
-      cop(c.dia.valor), cop(c.mes.valor), cop(c.anio.valor), pct(c.pct_anio)]),
-    ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio')), pct(sumaPct)]);
+  tablaCategorias($('t-cat'), ['Categoría', lblDia, 'Acumulado mes', 'Acumulado año', '% del año'], d.categorias,
+    ['Total', cop(sum('dia')), cop(sum('mes')), cop(sum('anio')), pct(sumaPct)], pct);
 
   // Tabla 2: unidades distintas (t y COP) → sin fila de totales
   const filas = [

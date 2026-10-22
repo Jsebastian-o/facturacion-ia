@@ -44,6 +44,9 @@ Requiere el driver **ODBC Driver 18 for SQL Server** instalado en el equipo.
   domingo 1 pertenecen al mes del viernes al que se suman.
 - Las categorías de peso se configuran con `CATEGORIAS_PESO` y coinciden por prefijo
   (`GR_CEMENTO` encuentra `GR_CEMENTOS`).
+- **Subcategorías:** cada categoría de la tabla "Facturación por categoría" tiene un **+** (o clic en la fila) que despliega sus
+  subcategorías (`DescCriterioMayorItem3`) con día / mes / año y % del año (sobre el mismo total anual). Suman la categoría.
+  Las tarjetas superiores muestran solo valor en pesos (sin toneladas); el peso está en su propia tabla.
 - **% del año:** en la tabla por categoría, el valor del acumulado del año de cada categoría dividido entre el total del año
   (en pesos). Las categorías suman 100 %. Si el total del año no es positivo, se muestra "—". En la pestaña Hoy el año incluye hoy.
 - **Tipo de cliente (canal):** tabla con la facturación por la columna `TipoCliente` de la vista. Se muestran siempre
@@ -71,7 +74,7 @@ pedir solo cada 60 segundos y tiene el botón "Actualizar ahora". Si el servidor
 
 | Ruta | Descripción |
 |---|---|
-| `GET /api/resumen?vista=ayer\|hoy` | Totales y por categoría (día / mes / año), peso foco; `hoy` incluye el día en curso |
+| `GET /api/resumen?vista=ayer\|hoy` | Totales y por categoría con `subcategorias` (día / mes / año), peso foco; `hoy` incluye el día en curso |
 | `GET /api/tendencia?dias=30&vista=ayer\|hoy` | Serie por día hábil |
 | `POST /api/refresh` | Fuerza recarga desde el servidor |
 | `POST /api/chat` | Agente (`{"mensajes":[{"role":"user","content":"..."}]}`) |
