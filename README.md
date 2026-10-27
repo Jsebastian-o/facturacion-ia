@@ -70,6 +70,15 @@ sirven siempre desde memoria, así que responden al instante sin esperar a la ba
 pedir solo cada 60 segundos y tiene el botón "Actualizar ahora". Si el servidor no responde, se siguen mostrando los
 últimos datos con un aviso en pantalla.
 
+## Fuente de datos de la pestaña "Hoy"
+
+La pestaña **Hoy** puede leer de otra base (p. ej. `bd_desarrollo`, donde un job carga la vista cada 2 h) mientras el resto
+del tablero y el agente siguen usando `DB_*`. Se configura en `.env` con `HOY_DB_SERVER`, `HOY_DB_NAME`, `HOY_DB_USER`,
+`HOY_DB_PASSWORD`, `HOY_VIEW_NAME` y `HOY_DB_TRUSTED_CONNECTION`; lo que quede vacío se hereda de `DB_*`. Si no se define
+ni servidor ni base, Hoy usa la misma fuente de siempre. Cada fuente tiene su propia caché y recarga en segundo plano.
+La estructura de la vista debe ser la misma (Fecha, Categoria, DescCriterioMayorItem3, Tienda, TipoCliente,
+ValorSubtotalLocal, Peso, Estado, FechaCarga). `/api/health` muestra el estado de ambas.
+
 ## API
 
 | Ruta | Descripción |

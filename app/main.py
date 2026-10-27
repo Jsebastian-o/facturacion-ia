@@ -23,7 +23,10 @@ STATIC = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Carga inicial y recargas periódicas en segundo plano: las páginas se sirven siempre desde memoria.
-    get_service().iniciar_refresco(get_settings().cache_ttl_seconds)
+    ttl = get_settings().cache_ttl_seconds
+    get_service().iniciar_refresco(ttl)
+    if get_service_hoy() is not get_service():
+        get_service_hoy().iniciar_refresco(ttl)
     yield
 
 
@@ -35,6 +38,20 @@ _basic = HTTPBasic(auto_error=False)
 def get_service() -> FacturacionService:
     s = get_settings()
     return FacturacionService(crear_repositorio(s), s)
+
+
+@lru_cache
+def get_service_hoy() -> FacturacionService:
+    """Servicio de la pestaña Hoy: usa su propia base si HOY_DB_* está definido; si no, el principal."""
+    s = get_settings()
+    if not s.hoy_separado:
+        return get_service()
+    sh = s.para_hoy()
+    return FacturacionService(crear_repositorio(sh), sh)
+
+
+def _servicio(en_curso: bool) -> FacturacionService:
+    return get_service_hoy() if en_curso else get_service()
 
 
 def requiere_acceso(cred: HTTPBasicCredentials | None = Depends(_basic)) -> None:
@@ -74,7 +91,10 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "fuente": get_settings().data_source, **get_service().estado()}
+    out = {"ok": True, "fuente": get_settings().data_source, **get_service().estado()}
+    if get_service_hoy() is not get_service():
+        out["hoy"] = get_service_hoy().estado()
+    return out
 
 
 def _en_curso(vista: str) -> bool:
@@ -87,17 +107,19 @@ def _en_curso(vista: str) -> bool:
 def resumen(fecha_corte: str | None = None, vista: str = "ayer"):
     """vista='ayer' (cierre hasta el día anterior) o 'hoy' (incluye el día en curso, parcial).
     fecha_corte = 'hoy' a efectos del cálculo (opcional; por defecto la fecha actual)."""
-    return _con_servidor(lambda: get_service().resumen(_corte(fecha_corte), _en_curso(vista)))
+    return _con_servidor(lambda: _servicio(_en_curso(vista)).resumen(_corte(fecha_corte), _en_curso(vista)))
 
 
 @app.get("/api/tendencia", dependencies=[Depends(requiere_acceso)])
 def tendencia(dias: int = 30, fecha_corte: str | None = None, vista: str = "ayer"):
-    return _con_servidor(lambda: get_service().tendencia(dias, _corte(fecha_corte), _en_curso(vista)))
+    return _con_servidor(lambda: _servicio(_en_curso(vista)).tendencia(dias, _corte(fecha_corte), _en_curso(vista)))
 
 
 @app.post("/api/refresh", dependencies=[Depends(requiere_acceso)])
 def refresh():
     _con_servidor(get_service().refrescar)
+    if get_service_hoy() is not get_service():
+        _con_servidor(get_service_hoy().refrescar)
     return {"ok": True, **get_service().estado()}
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +41,32 @@ class Settings:
     app_password: str
     categorias_valor: tuple[str, ...] = ("PRODUCTOS NO SIDOC",)
     canales: tuple[str, ...] = ("MAYORISTA", "MINORISTA", "CONSTRUCTORES")
+    # Fuente propia de la pestaña "Hoy" (vacío = usa la misma que el resto del tablero)
+    hoy_db_server: str = ""
+    hoy_db_name: str = ""
+    hoy_db_user: str = ""
+    hoy_db_password: str = ""
+    hoy_view_name: str = ""
+    hoy_db_trusted_connection: bool | None = None
+
+    @property
+    def hoy_separado(self) -> bool:
+        return self.data_source == "sql" and bool(self.hoy_db_server or self.hoy_db_name)
+
+    def para_hoy(self) -> "Settings":
+        """Configuración de la fuente de la pestaña Hoy: lo que no se defina se hereda de la principal."""
+        if not self.hoy_separado:
+            return self
+        trusted = self.db_trusted_connection if self.hoy_db_trusted_connection is None else self.hoy_db_trusted_connection
+        return replace(
+            self,
+            db_server=self.hoy_db_server or self.db_server,
+            db_name=self.hoy_db_name or self.db_name,
+            db_user=self.hoy_db_user or self.db_user,
+            db_password=self.hoy_db_password or self.db_password,
+            view_name=self.hoy_view_name or self.view_name,
+            db_trusted_connection=trusted,
+        )
 
 
 @lru_cache
@@ -70,4 +96,10 @@ def get_settings() -> Settings:
         app_password=e("APP_PASSWORD", ""),
         categorias_valor=tuple(c.upper() for c in _lista(e("CATEGORIAS_VALOR", "PRODUCTOS NO SIDOC"))),
         canales=tuple(c.upper() for c in _lista(e("CANALES", "MAYORISTA,MINORISTA,CONSTRUCTORES"))),
+        hoy_db_server=e("HOY_DB_SERVER", "").strip(),
+        hoy_db_name=e("HOY_DB_NAME", "").strip(),
+        hoy_db_user=e("HOY_DB_USER", "").strip(),
+        hoy_db_password=e("HOY_DB_PASSWORD", ""),
+        hoy_view_name=e("HOY_VIEW_NAME", "").strip(),
+        hoy_db_trusted_connection=_bool(e("HOY_DB_TRUSTED_CONNECTION", "")) if e("HOY_DB_TRUSTED_CONNECTION", "").strip() else None,
     )
