@@ -334,7 +334,8 @@ function pintarResumen(d) {
   $('dot').classList.toggle('off', !!d.aviso);
 
   avisos([
-    hoy ? ['Día en curso: las cifras son parciales y cambian durante el día' + (hVista ? '. Datos de la vista cargados a las ' + hVista + '.' : '.'), 'info'] : null,
+    hoy ? ['Día en curso: las cifras son parciales y cambian durante el día' + (hVista ? '. Datos de la vista cargados a las ' + hVista + '.' : '.')
+      + (d.ultima_fecha_datos ? ' Última fecha con datos en la fuente: ' + fechaDia(d.ultima_fecha_datos) + '.' : ''), 'info'] : null,
     d.aviso ? [d.aviso, 'aviso'] : null,
     d.sin_facturacion_dia ? [hoy
       ? 'Todavía no hay facturación registrada hoy' + (hVista ? ' (vista cargada a las ' + hVista + ')' : '') + '.'

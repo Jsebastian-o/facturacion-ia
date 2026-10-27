@@ -273,6 +273,7 @@ class FacturacionService:
             "sin_facturacion_dia": totales["dia"]["valor"] == 0 and totales["dia"]["peso_ton"] == 0,
             "datos_cargados_en": cache.cargado_en.isoformat(timespec="seconds"),
             "fecha_carga_vista": cache.fecha_carga.isoformat(timespec="seconds") if cache.fecha_carga else None,
+            "ultima_fecha_datos": cache.df["FechaReal"].max().date().isoformat() if len(cache.df) else None,
             "aviso": cache.aviso,
         }
 
@@ -364,5 +365,7 @@ class FacturacionService:
         return {
             "datos_cargados_en": c.cargado_en.isoformat(timespec="seconds") if c else None,
             "filas_en_cache": int(len(c.df)) if c else 0,
+            "ultima_fecha_datos": c.df["FechaReal"].max().date().isoformat() if c and len(c.df) else None,
+            "fecha_carga_vista": c.fecha_carga.isoformat(timespec="seconds") if c and c.fecha_carga else None,
             "refresco_en_segundo_plano": self._segundo_plano,
         }
